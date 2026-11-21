@@ -171,6 +171,15 @@ const commands = [
     )
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('rank')
+    .setDescription('כרטיס הפרופיל שלך או של משתמש אחר')
+    .addUserOption((o) => o.setName('user').setDescription('משתמש (אופציונלי)'))
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('leaderboard')
+    .setDescription('טבלת האלופים לפי ניסיון')
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('ticket-setup')
     .setDescription('Post the ticket panel in this channel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)

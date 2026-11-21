@@ -30,6 +30,13 @@ const oauthServer = require('./src/oauthServer');
 const giveaways = require('./src/giveaways');
 const community = require('./src/community');
 const { buildWinnerCard } = require('./src/winnerCard');
+const {
+  buildWelcomeCard,
+  buildProfileCard,
+  buildLevelUpCard,
+  buildLeaderboardCard,
+} = require('./src/imageCards');
+const levels = require('./src/levels');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
@@ -1851,10 +1858,44 @@ client.on(Events.GuildMemberAdd, async (member) => {
       (await member.guild.channels.fetch(channelId).catch(() => null));
     if (!channel || !channel.isTextBased() || channel.isDMBased()) return;
 
-    await channel.send({ embeds: [buildWelcomeEmbed(member.user, member.guild)] });
+    const card = await buildWelcomeCard({
+      avatarUrl: member.user.displayAvatarURL({ size: 512, extension: 'png' }),
+      name: member.user.globalName || member.user.username,
+      guildName: member.guild.name,
+      memberCount: member.guild.memberCount,
+    });
+    await channel.send({
+      embeds: [
+        buildWelcomeEmbed(member.user, member.guild).setImage('attachment://welcome.png'),
+      ],
+      files: [new AttachmentBuilder(card, { name: 'welcome.png' })],
+    });
     console.log(`[welcome] ${member.user.tag} joined ${member.guild.name} (#${member.guild.memberCount})`);
   } catch (err) {
     console.error('[welcome]', err.message);
+  }
+});
+
+// XP / coins from messages. No Message Content intent is needed — only the
+// author and timestamp are read, never what the message says.
+client.on(Events.MessageCreate, async (message) => {
+  try {
+    if (message.author.bot || !message.guild) return;
+    const result = levels.addMessage(message.guild.id, message.author.id);
+    if (!result?.leveledUp) return;
+
+    const card = await buildLevelUpCard({
+      avatarUrl: message.author.displayAvatarURL({ size: 512, extension: 'png' }),
+      name: message.author.globalName || message.author.username,
+      level: result.level,
+    });
+    await message.channel.send({
+      content: `🎉 <@${message.author.id}> עלה לרמה **${result.level}**!`,
+      files: [new AttachmentBuilder(card, { name: 'levelup.png' })],
+      allowedMentions: { parse: [] },
+    });
+  } catch (err) {
+    console.error('[levels]', err.message);
   }
 });
 
@@ -2050,6 +2091,54 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return interaction.reply({
             content: buildBeautifiedText(text, title),
             allowedMentions: { parse: [] },
+            ephemeral: false,
+          });
+        }
+
+        case 'rank': {
+          const target = interaction.options.getUser('user') || interaction.user;
+          const entry = levels.get(interaction.guild.id, target.id) || {
+            xp: 0,
+            coins: 0,
+            messages: 0,
+          };
+          const level = levels.levelFromXp(entry.xp);
+          const card = await buildProfileCard({
+            avatarUrl: target.displayAvatarURL({ size: 512, extension: 'png' }),
+            name: target.globalName || target.username,
+            level,
+            xp: entry.xp,
+            coins: entry.coins,
+            messages: entry.messages,
+            joinedAt: new Date(target.createdAt).toLocaleDateString('he-IL'),
+          });
+          return reply(interaction, {
+            content: `📊 **${target.username}** — רמה ${level}`,
+            files: [new AttachmentBuilder(card, { name: 'rank.png' })],
+            ephemeral: false,
+          });
+        }
+
+        case 'leaderboard': {
+          const top = levels.top(interaction.guild.id, 3);
+          const entries = await Promise.all(
+            top.map(async (e) => {
+              const user = await client.users.fetch(e.userId).catch(() => null);
+              return {
+                name: user?.globalName || user?.username || `משתמש ${e.userId.slice(-4)}`,
+                avatarUrl: user?.displayAvatarURL({ size: 256, extension: 'png' }),
+                level: e.level,
+                xp: e.xp,
+              };
+            })
+          );
+          const card = await buildLeaderboardCard({
+            guildName: interaction.guild.name,
+            entries,
+          });
+          return reply(interaction, {
+            content: '🏆 **טבלת האלופים**',
+            files: [new AttachmentBuilder(card, { name: 'leaderboard.png' })],
             ephemeral: false,
           });
         }

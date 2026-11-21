@@ -12,6 +12,8 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
 - 🎁 **Giveaways** — `/giveaway` with entry button, timer, auto winners, reroll, restart-safe storage, and a generated 16:9 winner card with the winner's avatar + text baked in
 - 💡 **Suggestions & Polls** — richer suggestion/poll cards, a time picker, auto-decide for suggestions, and `/staff-hide` to hide staff commands from regular members
+- 🎨 **Canvas image cards** — generated welcome image, `/rank` profile card, level-up card, and a podium `/leaderboard` image (Hebrew text baked in, avatars included)
+- 📈 **XP & coins** — earned from messages with a cooldown, saved in `levels.json`; powers the profile and leaderboard cards (no Message Content Intent needed)
 - 📦 **Sellable products** — 7 standalone bots in `bots/`
 
 ## 🚀 Run locally
