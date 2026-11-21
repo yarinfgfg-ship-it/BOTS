@@ -28,6 +28,7 @@ const profiles = require('./src/profiles');
 const oauth = require('./src/oauth');
 const oauthServer = require('./src/oauthServer');
 const giveaways = require('./src/giveaways');
+const { buildWinnerCard } = require('./src/winnerCard');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
@@ -1013,35 +1014,40 @@ function pickWinners(entrants, count, excluded = []) {
   return picked;
 }
 
-function winnerEmbed(user, prize, reroll = false) {
-  const text = config.giveaway.winnerText
-    .replace('{winner}', `<@${user.id}>`)
-    .replace('{prize}', `**${prize}**`);
-  return new EmbedBuilder()
-    .setColor(config.giveaway.color)
-    .setTitle(reroll ? config.giveaway.rerollTitle : config.giveaway.winnerTitle)
-    .setDescription(text)
-    .setImage(user.displayAvatarURL({ size: 4096, extension: 'png' }))
-    .setTimestamp();
-}
-
 async function announceWinners(channel, g, winnerIds, reroll = false) {
   for (const id of winnerIds) {
     const user = await client.users.fetch(id).catch(() => null);
-    if (!user) {
-      await channel
-        .send({
-          content: config.giveaway.winnerText
-            .replace('{winner}', `<@${id}>`)
-            .replace('{prize}', `**${g.prize}**`),
-          allowedMentions: { parse: ['users'] },
-        })
-        .catch(() => {});
-      continue;
+    const name = user ? user.globalName || user.username : 'משתמש';
+
+    const buffer = await buildWinnerCard({
+      avatarUrl: user?.displayAvatarURL({ size: 512, extension: 'png' }),
+      name,
+      prize: g.prize,
+      reroll,
+    }).catch((err) => {
+      console.error('[giveaway] card:', err.message);
+      return null;
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor(config.giveaway.color)
+      .setTitle(reroll ? config.giveaway.rerollTitle : config.giveaway.winnerTitle);
+
+    const payload = { content: `<@${id}>`, allowedMentions: { parse: ['users'] } };
+
+    if (buffer) {
+      embed.setImage('attachment://winner.png');
+      payload.files = [new AttachmentBuilder(buffer, { name: 'winner.png' })];
+    } else {
+      embed.setDescription(
+        config.giveaway.winnerText
+          .replace('{winner}', `<@${id}>`)
+          .replace('{prize}', `**${g.prize}**`)
+      );
     }
-    await channel
-      .send({ embeds: [winnerEmbed(user, g.prize, reroll)], allowedMentions: { parse: ['users'] } })
-      .catch(() => {});
+
+    payload.embeds = [embed];
+    await channel.send(payload).catch(() => {});
   }
 }
 

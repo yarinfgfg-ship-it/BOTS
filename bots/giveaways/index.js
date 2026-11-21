@@ -15,8 +15,10 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  AttachmentBuilder,
 } = require('discord.js');
 const config = require('./config');
+const { buildWinnerCard } = require('./winnerCard');
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
@@ -128,35 +130,40 @@ function pickWinners(entrants, count, excluded = []) {
   return picked;
 }
 
-function winnerEmbed(user, prize, reroll = false) {
-  const text = config.winnerText
-    .replace('{winner}', `<@${user.id}>`)
-    .replace('{prize}', `**${prize}**`);
-  return new EmbedBuilder()
-    .setColor(config.color)
-    .setTitle(reroll ? config.rerollTitle : config.winnerTitle)
-    .setDescription(text)
-    .setImage(user.displayAvatarURL({ size: 4096, extension: 'png' }))
-    .setTimestamp();
-}
-
 async function announceWinners(channel, g, winnerIds, reroll = false) {
   for (const id of winnerIds) {
     const user = await client.users.fetch(id).catch(() => null);
-    if (!user) {
-      await channel
-        .send({
-          content: config.winnerText
-            .replace('{winner}', `<@${id}>`)
-            .replace('{prize}', `**${g.prize}**`),
-          allowedMentions: { parse: ['users'] },
-        })
-        .catch(() => {});
-      continue;
+    const name = user ? user.globalName || user.username : 'משתמש';
+
+    const buffer = await buildWinnerCard({
+      avatarUrl: user?.displayAvatarURL({ size: 512, extension: 'png' }),
+      name,
+      prize: g.prize,
+      reroll,
+    }).catch((err) => {
+      console.error('[giveaway] card:', err.message);
+      return null;
+    });
+
+    const embed = new EmbedBuilder()
+      .setColor(config.color)
+      .setTitle(reroll ? config.rerollTitle : config.winnerTitle);
+
+    const payload = { content: `<@${id}>`, allowedMentions: { parse: ['users'] } };
+
+    if (buffer) {
+      embed.setImage('attachment://winner.png');
+      payload.files = [new AttachmentBuilder(buffer, { name: 'winner.png' })];
+    } else {
+      embed.setDescription(
+        config.winnerText
+          .replace('{winner}', `<@${id}>`)
+          .replace('{prize}', `**${g.prize}**`)
+      );
     }
-    await channel
-      .send({ embeds: [winnerEmbed(user, g.prize, reroll)], allowedMentions: { parse: ['users'] } })
-      .catch(() => {});
+
+    payload.embeds = [embed];
+    await channel.send(payload).catch(() => {});
   }
 }
 
