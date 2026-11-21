@@ -128,6 +128,38 @@ function pickWinners(entrants, count, excluded = []) {
   return picked;
 }
 
+function winnerEmbed(user, prize, reroll = false) {
+  const text = config.winnerText
+    .replace('{winner}', `<@${user.id}>`)
+    .replace('{prize}', `**${prize}**`);
+  return new EmbedBuilder()
+    .setColor(config.color)
+    .setTitle(reroll ? config.rerollTitle : config.winnerTitle)
+    .setDescription(text)
+    .setImage(user.displayAvatarURL({ size: 4096, extension: 'png' }))
+    .setTimestamp();
+}
+
+async function announceWinners(channel, g, winnerIds, reroll = false) {
+  for (const id of winnerIds) {
+    const user = await client.users.fetch(id).catch(() => null);
+    if (!user) {
+      await channel
+        .send({
+          content: config.winnerText
+            .replace('{winner}', `<@${id}>`)
+            .replace('{prize}', `**${g.prize}**`),
+          allowedMentions: { parse: ['users'] },
+        })
+        .catch(() => {});
+      continue;
+    }
+    await channel
+      .send({ embeds: [winnerEmbed(user, g.prize, reroll)], allowedMentions: { parse: ['users'] } })
+      .catch(() => {});
+  }
+}
+
 async function refresh(g) {
   const channel = await client.channels.fetch(g.channelId).catch(() => null);
   if (!channel) return;
@@ -155,12 +187,14 @@ async function endGiveaway(id) {
     } catch {}
   }
 
-  const text = winners.length
-    ? config.winners.replace('{winners}', winners.map((w) => `<@${w}>`).join(', '))
-    : config.noEntries;
-  try {
-    await channel.send({ content: text, allowedMentions: { parse: [] } });
-  } catch {}
+  if (!winners.length) {
+    try {
+      await channel.send({ content: config.noEntries });
+    } catch {}
+    return;
+  }
+
+  await announceWinners(channel, g, winners);
 }
 
 async function restore() {
@@ -273,14 +307,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const [winnerId] = pickWinners(g.entrants || [], 1, excluded);
       if (!winnerId) return reply(interaction, { content: config.noReroll });
       set(g.id, { rerollWinners: [...excluded, winnerId] });
-      const text = config.rerollWinner.replace('{winner}', `<@${winnerId}>`);
       const channel = await client.channels.fetch(g.channelId).catch(() => null);
-      if (channel) {
-        try {
-          await channel.send({ content: text, allowedMentions: { parse: [] } });
-        } catch {}
-      }
-      return reply(interaction, { content: text });
+      if (channel) await announceWinners(channel, g, [winnerId], true);
+      return reply(interaction, { content: '✅ נשלחה הודעת זוכה חדשה.' });
     }
 
     if (sub === 'list') {

@@ -245,8 +245,9 @@ module.exports = {
     roleRequired: '⚠️ צריך את התפקיד הנדרש כדי להיכנס להגרלה.',
     ended: '🎉 ההגרלה הסתיימה!',
     noEntries: '🙁 אף אחד לא נכנס להגרלה הזאת.',
-    winners: '🎉 הזוכים: {winners}',
-    rerollWinner: '🎉 זוכה חדש: {winner}',
+    winnerTitle: '🎉 יש לנו זוכה!',
+    rerollTitle: '🎉 זוכה חדש!',
+    winnerText: 'כל הכבוד {winner} זכיתה ב **{prize}** 🎉',
     noReroll: '⚠️ אין משתתפים נוספים להגרלה מחדש.',
   },
 
