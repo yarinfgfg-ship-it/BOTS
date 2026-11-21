@@ -19,6 +19,7 @@ const permissions = [
   'AddReactions',
   'ManageChannels',
   'ManageMessages',
+  'ModerateMembers',
 ];
 
 const bitfield = PermissionsBitField.resolve(permissions);

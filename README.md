@@ -9,6 +9,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 👋 **Welcome** — Hebrew join message with the member's large avatar + member count
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
+- 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
 - 📦 **Sellable products** — `bots/tickets`, `bots/verify`, `bots/welcome`, `bots/owner-tools`
 
 ## 🚀 Run locally
@@ -19,6 +20,10 @@ copy .env.example .env   # fill DISCORD_TOKEN, CLIENT_ID, etc.
 npm run deploy
 npm start
 ```
+
+## 🛡️ AutoMod setup
+In Discord Developer Portal → Bot → **Privileged Gateway Intents**, enable **Message Content Intent**.
+The bot also needs **Manage Messages** and **Timeout Members** permissions — re-invite it with `npm run invite` (or grant those permissions to its role). Edit the warning texts and NSFW keyword list in `config.js` → `moderation`.
 
 ## ☁️ Run 24/7 for free (no credit card)
 

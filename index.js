@@ -28,7 +28,11 @@ const oauthServer = require('./src/oauthServer');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
-const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages];
+const intents = [
+  GatewayIntentBits.Guilds,
+  GatewayIntentBits.GuildMessages,
+  GatewayIntentBits.MessageContent,
+];
 if (process.env.ENABLE_MEMBERS_INTENT === 'true') {
   intents.push(GatewayIntentBits.GuildMembers);
 }
@@ -968,6 +972,83 @@ async function closeTicket(interaction) {
 
   console.log(`[ticket] Closed #${number} by ${interaction.user.tag}`);
 }
+
+/* ------------------------------------------------------------------ */
+/* AutoMod — no links, no NSFW media                                   */
+/* ------------------------------------------------------------------ */
+
+const LINK_PATTERN =
+  /(https?:\/\/[^\s<>]+|www\.[^\s<>]+|discord(?:app)?\.com\/invite\/[^\s<>]+|discord\.gg\/[^\s<>]+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|gg|ly|tv|co|app|dev|info|biz|ru|il)\b)/i;
+
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const NSFW_PATTERN = new RegExp(
+  config.moderation.nsfwKeywords.map(escapeRegex).join('|'),
+  'i'
+);
+
+function automodBypass(message) {
+  const member = message.member;
+  if (!member) return true;
+  return (
+    OWNER_IDS.includes(member.id) ||
+    member.permissions.has(PermissionFlagsBits.Administrator) ||
+    member.permissions.has(PermissionFlagsBits.ManageMessages) ||
+    member.permissions.has(PermissionFlagsBits.ModerateMembers)
+  );
+}
+
+async function automodPunish(message, dmText, reason) {
+  const me = message.guild?.members.me;
+
+  if (me?.permissions.has(PermissionFlagsBits.ManageMessages)) {
+    try {
+      await message.delete();
+    } catch {
+      // Message may already be deleted, or the bot may lack hierarchy.
+    }
+  }
+
+  if (me?.permissions.has(PermissionFlagsBits.ModerateMembers) && message.member) {
+    try {
+      await message.member.timeout(config.moderation.timeoutMs, reason);
+    } catch {
+      // Server owner / higher role / missing permission — nothing we can do.
+    }
+  }
+
+  try {
+    await message.author.send(dmText);
+  } catch {
+    // User has DMs closed — that's fine.
+  }
+}
+
+client.on(Events.MessageCreate, async (message) => {
+  if (!message.guild || message.author.bot || message.system) return;
+
+  if (message.partial) {
+    try {
+      await message.fetch();
+    } catch {
+      return;
+    }
+  }
+
+  if (automodBypass(message)) return;
+
+  const content = String(message.content || '');
+  const attachmentNames = message.attachments.map((a) => a.name || '').join(' ');
+  const hasMedia = message.attachments.size > 0 || message.embeds.length > 0;
+
+  if (LINK_PATTERN.test(content)) {
+    await automodPunish(message, config.moderation.dmLink, 'AutoMod: links are not allowed');
+    return;
+  }
+
+  if (hasMedia && NSFW_PATTERN.test(`${content} ${attachmentNames}`)) {
+    await automodPunish(message, config.moderation.dmNsfw, 'AutoMod: NSFW content is not allowed');
+  }
+});
 
 /* ------------------------------------------------------------------ */
 /* Events                                                              */
