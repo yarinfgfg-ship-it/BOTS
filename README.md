@@ -22,8 +22,9 @@ npm start
 ```
 
 ## 🛡️ AutoMod setup
-In Discord Developer Portal → Bot → **Privileged Gateway Intents**, enable **Message Content Intent**.
-The bot also needs **Manage Messages** and **Timeout Members** permissions — re-invite it with `npm run invite` (or grant those permissions to its role). Edit the warning texts and NSFW keyword list in `config.js` → `moderation`.
+The bot creates Discord-native AutoMod rules on startup — no Message Content Intent needed. It needs **Manage Server** permission to create rules, so re-invite it with `npm run invite` (or grant that permission to its role). Edit the rule names, link regexes, timeout, and NSFW keyword list in `config.js` → `moderation`.
+
+For AI scanning of explicit images/GIFs with no text, also enable Discord’s built-in **Server Settings → Safety Setup → AutoMod → Block explicit content**.
 
 ## ☁️ Run 24/7 for free (no credit card)
 

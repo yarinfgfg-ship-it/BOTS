@@ -28,11 +28,7 @@ const oauthServer = require('./src/oauthServer');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
-const intents = [
-  GatewayIntentBits.Guilds,
-  GatewayIntentBits.GuildMessages,
-  GatewayIntentBits.MessageContent,
-];
+const intents = [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages];
 if (process.env.ENABLE_MEMBERS_INTENT === 'true') {
   intents.push(GatewayIntentBits.GuildMembers);
 }
@@ -974,81 +970,75 @@ async function closeTicket(interaction) {
 }
 
 /* ------------------------------------------------------------------ */
-/* AutoMod — no links, no NSFW media                                   */
+/* AutoMod — Discord-native link + NSFW rules                          */
 /* ------------------------------------------------------------------ */
 
-const LINK_PATTERN =
-  /(https?:\/\/[^\s<>]+|www\.[^\s<>]+|discord(?:app)?\.com\/invite\/[^\s<>]+|discord\.gg\/[^\s<>]+|\b(?:[a-z0-9-]+\.)+(?:com|net|org|io|gg|ly|tv|co|app|dev|info|biz|ru|il)\b)/i;
+const AUTOMOD_ACTIONS = () => [
+  { type: 1, metadata: {} }, // BLOCK_MESSAGE
+  {
+    type: 3, // TIMEOUT
+    metadata: { duration_seconds: Math.floor(config.moderation.timeoutMs / 1000) },
+  },
+];
 
-const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const NSFW_PATTERN = new RegExp(
-  config.moderation.nsfwKeywords.map(escapeRegex).join('|'),
-  'i'
-);
-
-function automodBypass(message) {
-  const member = message.member;
-  if (!member) return true;
-  return (
-    OWNER_IDS.includes(member.id) ||
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.permissions.has(PermissionFlagsBits.ManageMessages) ||
-    member.permissions.has(PermissionFlagsBits.ModerateMembers)
-  );
+function automodRuleBody(name, triggerType, triggerMetadata, exemptRoles) {
+  return {
+    name,
+    event_type: 1, // MESSAGE_SEND
+    trigger_type: triggerType,
+    trigger_metadata: triggerMetadata,
+    actions: AUTOMOD_ACTIONS(),
+    exempt_roles: exemptRoles,
+    enabled: true,
+  };
 }
 
-async function automodPunish(message, dmText, reason) {
-  const me = message.guild?.members.me;
+async function syncAutoModRules(guild) {
+  const cfg = configFor(guild.id);
+  const exempt = [...new Set([...(cfg.supportRoles || []), ...(config.ids.supportRoles || [])])]
+    .filter((id) => guild.roles.cache.has(id));
 
-  if (me?.permissions.has(PermissionFlagsBits.ManageMessages)) {
-    try {
-      await message.delete();
-    } catch {
-      // Message may already be deleted, or the bot may lack hierarchy.
-    }
-  }
+  const desired = [
+    automodRuleBody(
+      config.moderation.linkRuleName,
+      1, // KEYWORD — regex patterns match all links
+      { keyword_filter: [], regex_patterns: config.moderation.linkRegex },
+      exempt
+    ),
+    automodRuleBody(
+      config.moderation.nsfwRuleName,
+      1,
+      { keyword_filter: config.moderation.nsfwKeywords, regex_patterns: [] },
+      exempt
+    ),
+  ];
 
-  if (me?.permissions.has(PermissionFlagsBits.ModerateMembers) && message.member) {
-    try {
-      await message.member.timeout(config.moderation.timeoutMs, reason);
-    } catch {
-      // Server owner / higher role / missing permission — nothing we can do.
-    }
-  }
-
+  let existing = [];
   try {
-    await message.author.send(dmText);
-  } catch {
-    // User has DMs closed — that's fine.
-  }
-}
-
-client.on(Events.MessageCreate, async (message) => {
-  if (!message.guild || message.author.bot || message.system) return;
-
-  if (message.partial) {
-    try {
-      await message.fetch();
-    } catch {
-      return;
-    }
-  }
-
-  if (automodBypass(message)) return;
-
-  const content = String(message.content || '');
-  const attachmentNames = message.attachments.map((a) => a.name || '').join(' ');
-  const hasMedia = message.attachments.size > 0 || message.embeds.length > 0;
-
-  if (LINK_PATTERN.test(content)) {
-    await automodPunish(message, config.moderation.dmLink, 'AutoMod: links are not allowed');
+    existing = await client.rest.get(`/guilds/${guild.id}/auto-moderation/rules`);
+  } catch (err) {
+    console.error(`[automod] ${guild.id} list:`, err.rawError?.message || err.message);
     return;
   }
 
-  if (hasMedia && NSFW_PATTERN.test(`${content} ${attachmentNames}`)) {
-    await automodPunish(message, config.moderation.dmNsfw, 'AutoMod: NSFW content is not allowed');
+  for (const rule of desired) {
+    const current = existing.find((r) => r.name === rule.name);
+    try {
+      if (current) {
+        await client.rest.patch(`/guilds/${guild.id}/auto-moderation/rules/${current.id}`, { body: rule });
+      } else {
+        await client.rest.post(`/guilds/${guild.id}/auto-moderation/rules`, { body: rule });
+      }
+      console.log(`[automod] ${guild.id}: ${rule.name} ready`);
+    } catch (err) {
+      console.error(
+        `[automod] ${guild.id} ${rule.name}:`,
+        err.rawError?.message || err.message,
+        err.rawError?.errors ? JSON.stringify(err.rawError.errors) : ''
+      );
+    }
   }
-});
+}
 
 /* ------------------------------------------------------------------ */
 /* Events                                                              */
@@ -1096,6 +1086,7 @@ client.once(Events.ClientReady, async (c) => {
       if (tickets || panels) {
         console.log(`[sync] ${guild.id}: tickets=${tickets} panels=${panels}`);
       }
+      await syncAutoModRules(guild);
     } catch (err) {
       console.error(`[sync] ${guild.id}: ${err.message}`);
     }

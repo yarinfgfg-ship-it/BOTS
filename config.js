@@ -34,8 +34,15 @@ module.exports = {
   // ---------------------------------------------------------------------
   moderation: {
     timeoutMs: 60_000,
-    dmLink: '⚠️ שליחת קישורים אסורה בשרת. ההודעה נמחקה והוטלת עליך השהייה של דקה.',
-    dmNsfw: '⚠️ תוכן NSFW אסור בשרת. ההודעה נמחקה והוטלת עליך השהייה של דקה.',
+    linkRuleName: '🚫 אין קישורים',
+    nsfwRuleName: '🚫 אין תוכן NSFW',
+    linkRegex: [
+      'https?://',
+      'www\\.',
+      'discord\\.gg/',
+      'discord(app)?\\.com/invite/',
+      '\\b[a-z0-9-]+\\.(com|net|org|io|gg|ly|tv|co|app|dev|info|biz|ru|il)\\b',
+    ],
     nsfwKeywords: [
       'nsfw', 'porn', 'xxx', 'hentai', 'nude', 'sex', 'cum', 'anal', 'oral',
       'pussy', 'fap', 'pornhub', 'xvideos', 'onlyfans',

@@ -19,6 +19,7 @@ const permissions = [
   'AddReactions',
   'ManageChannels',
   'ManageMessages',
+  'ManageGuild',
   'ModerateMembers',
 ];
 
