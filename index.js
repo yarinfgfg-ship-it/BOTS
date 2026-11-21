@@ -973,26 +973,27 @@ async function closeTicket(interaction) {
 /* Events                                                              */
 /* ------------------------------------------------------------------ */
 
+// Start the HTTP server right away — /health must answer even if the Discord
+// login fails, otherwise the host thinks the app is dead.
+oauthServer.start(async (user, guildId) => {
+  try {
+    const roleId = configFor(guildId).verifyRoleId;
+    if (!roleId) return;
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return;
+    const member = await guild.members.fetch(user.id).catch(() => null);
+    if (member && !member.roles.cache.has(roleId)) {
+      await member.roles.add(roleId, 'Verified via OAuth2');
+    }
+  } catch (err) {
+    console.error('[oauth] role:', err.message);
+  }
+});
+
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Logged in as ${c.user.tag}`);
   console.log(`   Tickets category: ${config.ids.category || 'NOT SET'}`);
   console.log(`   Support roles: ${config.ids.supportRoles.join(', ') || 'NOT SET'}`);
-
-  // OAuth2 callback server — saves the token/profile and grants the role.
-  oauthServer.start(async (user, guildId) => {
-    try {
-      const roleId = configFor(guildId).verifyRoleId;
-      if (!roleId) return;
-      const guild = client.guilds.cache.get(guildId);
-      if (!guild) return;
-      const member = await guild.members.fetch(user.id).catch(() => null);
-      if (member && !member.roles.cache.has(roleId)) {
-        await member.roles.add(roleId, 'Verified via OAuth2');
-      }
-    } catch (err) {
-      console.error('[oauth] role:', err.message);
-    }
-  });
 
   // On cloud hosts there is no terminal to run `npm run deploy` manually.
   if (process.env.AUTO_DEPLOY_COMMANDS === 'true') {
