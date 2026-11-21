@@ -1,5 +1,5 @@
 {
-  "name": "gz-verify-bot",
+  "name": "verify-bot",
   "version": "1.0.0",
   "private": true,
   "main": "index.js",
