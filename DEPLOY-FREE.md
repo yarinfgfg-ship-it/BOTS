@@ -29,8 +29,8 @@
 | --- | --- |
 | `DISCORD_TOKEN` | הטוקן של הבוט |
 | `CLIENT_ID` | מזהה האפליקציה |
-| `CLIENT_SECRET` | סוד הלקוח (לא להדפיס אותו) |
-| `REDIRECT_URI` | `https://shomer-hakkahila.onrender.com/callback` |
+| `CLIENT_SECRET` | **אופציונלי** — רק לפקודות `/auth-*`; אפשר להשאיר ריק |
+| `REDIRECT_URI` | `https://<שם-השירות-שלך>.onrender.com/callback` — רק אם משתמשים ב־`/auth-*` |
 | `BOT_OWNER_IDS` | מזהה המשתמש שלכם |
 | `ENABLE_MEMBERS_INTENT` | `true` |
 | `AUTO_DEPLOY_COMMANDS` | `true` |
@@ -39,7 +39,7 @@
 5. לחצו **Create Web Service** וחכו לבנייה (כמה דקות).
 6. כשהסטטוס יהיה **Live**, פתחו:
    ```
-   https://shomer-hakkahila.onrender.com/health
+   https://bots-xinzon.onrender.com/health
    ```
    צריך לחזור `ok`.
 
@@ -50,7 +50,7 @@
 1. https://discord.com/developers/applications/1572355509502218270/oauth2
 2. תחת **Redirects**, הוסיפו בדיוק:
    ```
-   https://shomer-hakkahila.onrender.com/callback
+   https://bots-xinzon.onrender.com/callback
    ```
 3. **Save Changes**.
 4. מחקו את הישן (כתובת ה־Cloudflare tunnel) אם הוא כבר לא פעיל.
@@ -63,7 +63,7 @@
 2. **Add New Monitor**:
    - Monitor Type: **HTTP(s)**
    - Friendly Name: `Shomer Havoda`
-   - URL: `https://shomer-hakkahila.onrender.com/health`
+   - URL: `https://bots-xinzon.onrender.com/health`
    - Monitoring Interval: **5 minutes** (מותר בחינם)
 3. שמרו. מעכשיו הבוט יישאר ער.
 

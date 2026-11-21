@@ -28,7 +28,7 @@ Short version:
 1. Push this repo to GitHub (already done here).
 2. Render → **New Web Service** → this repo → **Free** → `/health`.
 3. Add env vars (`DISCORD_TOKEN`, `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`, `BOT_OWNER_IDS`, `ENABLE_MEMBERS_INTENT=true`, `AUTO_DEPLOY_COMMANDS=true`, `GUILDS_JSON`).
-4. Discord Portal → OAuth2 Redirects → `https://shomer-hakkahila.onrender.com/callback`.
+4. Discord Portal → OAuth2 Redirects → `https://bots-xinzon.onrender.com/callback`.
 5. UptimeRobot → ping `/health` every 5 minutes so Render doesn't sleep.
 
 ## 📁 Structure

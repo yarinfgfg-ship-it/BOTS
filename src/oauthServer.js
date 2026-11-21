@@ -106,7 +106,11 @@ p{line-height:1.6;color:#b5bac1}</style></head><body><div class="card">
 // onAuthorized(user, guildId, userId) lets index.js use the live Discord client
 // (e.g. re-apply the verified role) without this module needing a bot token.
 function start(onAuthorized) {
-  if (!enabled()) return null;
+  // The HTTP server also serves /health for hosting, so it must run even when
+  // OAuth is not configured. Only the /callback route needs the secret.
+  if (!enabled()) {
+    console.warn('[oauth] CLIENT_SECRET not set — OAuth callback disabled, health check still active.');
+  }
 
   const server = http.createServer(async (req, res) => {
     let url;
@@ -126,6 +130,11 @@ function start(onAuthorized) {
     if (url.pathname !== '/callback') {
       res.writeHead(404);
       return res.end('Not found');
+    }
+
+    if (!enabled()) {
+      res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
+      return res.end(htmlPage('אימות לא מוגדר', 'CLIENT_SECRET לא הוגדר בשרת.', false));
     }
 
     const code = url.searchParams.get('code');
