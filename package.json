@@ -1,0 +1,19 @@
+{
+  "name": "discord-ticket-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "A clean Discord ticket bot with editable embeds and no server name in the footer.",
+  "main": "index.js",
+  "scripts": {
+    "deploy": "node src/deploy-commands.js",
+    "invite": "node src/invite.js",
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.15.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

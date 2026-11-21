@@ -1,0 +1,18 @@
+module.exports = {
+  color: '#5865F2',
+  alertColor: '#ED4245',
+  notAllowed: '⚠️ רק יוצר הבוט יכול להשתמש בפקודה הזאת.',
+  invalidUser: '⚠️ מזהה משתמש לא תקין.',
+  self: '⚠️ אי אפשר לשלוח לעצמך.',
+  needTarget: '⚠️ צריך `invite:` או `guild:`.',
+  notFound: '⚠️ לא נמצא משתמש עם המזהה הזה.',
+  noGuild: '⚠️ לא נמצא שרת עם המזהה הזה.',
+  notInGuild: '⚠️ הבוט לא נמצא בשרת הזה — השתמשו ב־`invite:`.',
+  dmTitle: '📩 הודעה פרטית',
+  alertTitle: '⚠️הודעה מהשרת התראה⚠️',
+  sent: '✅ נשלחה הודעה ל־{user}.',
+  failed: '❌ לא הצלחתי לשלוח ל־{user}.',
+  joinTitle: '🎮 הזמנה לשרת',
+  joinSent: '✅ שלחתי ל־{user} קישור הצטרפות לשרת.',
+  joinFailed: '❌ לא הצלחתי לשלוח את ההזמנה ל־{user}.',
+};

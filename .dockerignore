@@ -1,0 +1,12 @@
+node_modules
+.git
+.gitignore
+*.log
+.env
+.env.*
+!.env.example
+bots
+assets
+test-bot.js
+refresh-verify-panels.js
+set-bot-profile.js
