@@ -1,0 +1,19 @@
+[
+  "verify-setup",
+  "verify-role",
+  "join-role",
+  "verify-unverified",
+  "verify-add",
+  "welcome-setup",
+  "ticket-setup",
+  "ticket-config",
+  "ticket-roles",
+  "ticket-message",
+  "ticket-category",
+  "ticket-image",
+  "ticket-panel",
+  "suggestion-setup",
+  "poll",
+  "staff-hide",
+  "giveaway"
+]

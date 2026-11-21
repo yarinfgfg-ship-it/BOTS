@@ -144,6 +144,29 @@ const commands = [
     .toJSON(),
 ];
 
+// דיסקורד לא מאפשר לבוטים לשנות הרשאות פקודות — מסתירים את פקודות הצוות
+// כברירת מחדל ואוכפים בעלות בקוד. /suggest נשארת פתוחה לכולם.
+for (const cmd of commands) {
+  if (cmd.default_member_permissions && cmd.default_member_permissions !== '0') {
+    cmd.default_member_permissions = '0';
+  }
+}
+const STAFF_COMMANDS = commands
+  .filter((c) => c.default_member_permissions === '0')
+  .map((c) => c.name);
+const OWNER_IDS = (process.env.BOT_OWNER_IDS || '')
+  .split(',')
+  .map((id) => id.trim())
+  .filter(Boolean);
+
+function isOwnerUser(interaction) {
+  return (
+    OWNER_IDS.includes(interaction.user.id) ||
+    interaction.guild?.ownerId === interaction.user.id ||
+    interaction.user.id === interaction.client?.application?.owner?.id
+  );
+}
+
 async function reply(interaction, payload) {
   const body = { ephemeral: true, ...payload };
   if (interaction.replied || interaction.deferred) return interaction.followUp(body);
@@ -534,36 +557,6 @@ async function restore() {
   }
 }
 
-async function applyStaffVisibility(guild, roleId) {
-  const appId = client.user.id;
-  const [globalCommands, guildCommands] = await Promise.all([
-    client.rest.get(`/applications/${appId}/commands`),
-    client.rest.get(`/applications/${appId}/guilds/${guild.id}/commands`),
-  ]);
-  const allowed = [{ id: roleId, type: 1, permission: true }];
-  if (process.env.BOT_OWNER_IDS) {
-    for (const id of process.env.BOT_OWNER_IDS.split(',').map((x) => x.trim()).filter(Boolean)) {
-      if (!allowed.some((p) => p.id === id)) allowed.push({ id, type: 2, permission: true });
-    }
-  }
-  if (guild.ownerId && !allowed.some((p) => p.id === guild.ownerId)) {
-    allowed.push({ id: guild.ownerId, type: 2, permission: true });
-  }
-
-  const seen = new Set();
-  const permissions = [];
-  for (const cmd of [...globalCommands, ...guildCommands]) {
-    if (!cmd.default_member_permissions || cmd.default_member_permissions === '0') continue;
-    if (seen.has(cmd.id)) continue;
-    seen.add(cmd.id);
-    permissions.push({ id: cmd.id, permissions: allowed });
-  }
-  await client.rest.put(Routes.guildApplicationCommandsPermissions(appId, guild.id), {
-    body: permissions,
-  });
-  return permissions.length;
-}
-
 client.once(Events.ClientReady, async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   const rest = new REST({ version: '10' }).setToken(token);
@@ -574,12 +567,6 @@ client.once(Events.ClientReady, async () => {
     console.error('[deploy]', err.rawError?.message || err.message);
   }
   await restore();
-
-  for (const [guildId, cfg] of Object.entries(load().settings)) {
-    if (!cfg.staffRoleId) continue;
-    const guild = client.guilds.cache.get(guildId);
-    if (guild) await applyStaffVisibility(guild, cfg.staffRoleId).catch(() => {});
-  }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -606,6 +593,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!interaction.isChatInputCommand()) return;
 
+    if (STAFF_COMMANDS.includes(interaction.commandName) && !isOwnerUser(interaction)) {
+      return reply(interaction, { content: config.notStaff });
+    }
+
     if (interaction.commandName === 'suggestion-setup') {
       const current = setting(interaction.guild.id) || {};
       if (interaction.options.getBoolean('clear')) {
@@ -628,12 +619,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (interaction.commandName === 'staff-hide') {
-      const role = interaction.options.getRole('role', true);
-      setSetting(interaction.guild.id, { staffRoleId: role.id });
-      const count = await applyStaffVisibility(interaction.guild, role.id);
-      return reply(interaction, {
-        content: `${config.hiddenDone.replace('{role}', role.id)}\nהוסתרו ${count} פקודות צוות.`,
-      });
+      return reply(interaction, { content: config.hiddenDone });
     }
 
     if (interaction.commandName === 'suggest') return await createSuggestion(interaction);

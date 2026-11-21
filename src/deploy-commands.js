@@ -385,11 +385,8 @@ const commands = [
     .toJSON(),
   new SlashCommandBuilder()
     .setName('staff-hide')
-    .setDescription('הסתרת פקודות צוות ממשתמשים רגילים')
+    .setDescription('רענון הסתרת פקודות צוות ממי שאינו בעלים')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addRoleOption((o) =>
-      o.setName('role').setDescription('תפקיד הצוות שיראה את הפקודות').setRequired(true)
-    )
     .toJSON(),
   new SlashCommandBuilder()
     .setName('giveaway')
@@ -439,6 +436,23 @@ const commands = [
     .addSubcommand((s) => s.setName('list').setDescription('רשימת הגרלות פתוחות'))
     .toJSON(),
 ];
+
+// דיסקורד לא מאפשר לבוטים לשנות הרשאות פקודות דרך ה־API, אז מסתירים את
+// פקודות הצוות כברירת מחדל ('0') ואוכפים בעלות בקוד. פקודות ציבור נשארות.
+const fs = require('fs');
+const path = require('path');
+const staffCommandNames = commands
+  .filter((c) => c.default_member_permissions && c.default_member_permissions !== '0')
+  .map((c) => c.name);
+fs.writeFileSync(
+  path.join(__dirname, 'staff-commands.json'),
+  JSON.stringify(staffCommandNames, null, 2) + '\n'
+);
+for (const cmd of commands) {
+  if (cmd.default_member_permissions && cmd.default_member_permissions !== '0') {
+    cmd.default_member_permissions = '0';
+  }
+}
 
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID, INSTANT_GUILD_IDS } = process.env;
 
