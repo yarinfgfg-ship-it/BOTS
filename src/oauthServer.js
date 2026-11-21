@@ -128,6 +128,12 @@ function start(onAuthorized) {
       return res.end('ok');
     }
 
+    // Build marker — lets us confirm which version the host is running.
+    if (url.pathname === '/version') {
+      res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
+      return res.end('giveaways-2026-11-22');
+    }
+
     if (url.pathname !== '/callback') {
       res.writeHead(404);
       return res.end('Not found');
