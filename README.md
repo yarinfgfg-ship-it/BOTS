@@ -10,7 +10,8 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
-- 📦 **Sellable products** — `bots/tickets`, `bots/verify`, `bots/welcome`, `bots/owner-tools`
+- 🎁 **Giveaways** — `/giveaway` with entry button, timer, auto winners, reroll, and restart-safe storage
+- 📦 **Sellable products** — 6 standalone bots in `bots/`
 
 ## 🚀 Run locally
 
@@ -34,7 +35,7 @@ Short version:
 1. Push this repo to GitHub (already done here).
 2. Render → **New Web Service** → this repo → **Free** → `/health`.
 3. Add env vars (`DISCORD_TOKEN`, `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`, `BOT_OWNER_IDS`, `ENABLE_MEMBERS_INTENT=true`, `AUTO_DEPLOY_COMMANDS=true`, `GUILDS_JSON`).
-4. Discord Portal → OAuth2 Redirects → `https://bots-xinzon.onrender.com/callback`.
+4. Discord Portal → OAuth2 Redirects → `https://bots-xinz.onrender.com/callback`.
 5. UptimeRobot → ping `/health` every 5 minutes so Render doesn't sleep.
 
 ## 📁 Structure

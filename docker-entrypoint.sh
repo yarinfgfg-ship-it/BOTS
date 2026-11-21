@@ -15,5 +15,6 @@ done
 [ -z "$TICKETS_JSON" ] || printf '%s' "$TICKETS_JSON" > /app/data/tickets.json
 [ -z "$PROFILES_JSON" ] || printf '%s' "$PROFILES_JSON" > /app/data/profiles.json
 [ -z "$OAUTH_JSON" ] || printf '%s' "$OAUTH_JSON" > /app/data/oauth.json
+[ -z "$GIVEAWAYS_JSON" ] || printf '%s' "$GIVEAWAYS_JSON" > /app/data/giveaways.json
 
 exec node index.js

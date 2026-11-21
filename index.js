@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+const crypto = require('crypto');
+
 const {
   Client,
   GatewayIntentBits,
@@ -25,6 +27,7 @@ const ticketConfig = require('./src/ticketConfig');
 const profiles = require('./src/profiles');
 const oauth = require('./src/oauth');
 const oauthServer = require('./src/oauthServer');
+const giveaways = require('./src/giveaways');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
@@ -970,6 +973,218 @@ async function closeTicket(interaction) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Giveaways                                                           */
+/* ------------------------------------------------------------------ */
+
+function giveawayEmbed(g) {
+  const count = (g.entrants || []).length;
+  const roleLine = g.roleId ? `\n🎭 דרישה: <@&${g.roleId}>` : '';
+  return new EmbedBuilder()
+    .setColor(config.giveaway.color)
+    .setTitle(g.ended ? `🎉 ${g.prize} — הסתיים` : `🎉 ${g.prize}`)
+    .setDescription(
+      g.ended
+        ? `👥 משתתפים: **${count}**\n🏆 זוכים: **${g.winners}**`
+        : `לחצו על הכפתור כדי להיכנס!\n\n👥 משתתפים: **${count}**\n🏆 זוכים: **${g.winners}**\n⏰ מסתיים: <t:${Math.floor(g.endsAt / 1000)}:R>${roleLine}`
+    )
+    .setFooter({ text: `מארח: ${g.hostTag || 'יוצר השרת'}` })
+    .setTimestamp();
+}
+
+function giveawayComponents(g) {
+  if (g.ended) return [];
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`giveaway_enter:${g.id}`)
+        .setLabel(config.giveaway.button)
+        .setStyle(ButtonStyle.Success)
+    ),
+  ];
+}
+
+function pickWinners(entrants, count, excluded = []) {
+  const pool = [...new Set(entrants)].filter((id) => !excluded.includes(id));
+  const picked = [];
+  while (picked.length < count && pool.length) {
+    const [id] = pool.splice(crypto.randomInt(pool.length), 1);
+    picked.push(id);
+  }
+  return picked;
+}
+
+async function refreshGiveawayMessage(g) {
+  const channel = await client.channels.fetch(g.channelId).catch(() => null);
+  if (!channel) return;
+  const message = await channel.messages.fetch(g.messageId).catch(() => null);
+  if (!message) return;
+  try {
+    await message.edit({ embeds: [giveawayEmbed(g)], components: giveawayComponents(g) });
+  } catch {
+    /* message may be gone */
+  }
+}
+
+async function endGiveaway(id) {
+  const g = giveaways.get(id);
+  if (!g || g.ended) return;
+
+  const winners = pickWinners(g.entrants || [], g.winners || 1);
+  giveaways.set(id, { ended: true, endedAt: Date.now(), winners });
+
+  const channel = await client.channels.fetch(g.channelId).catch(() => null);
+  if (!channel) return;
+
+  const message = await channel.messages.fetch(g.messageId).catch(() => null);
+  const ended = { ...g, ended: true, winners };
+  if (message) {
+    try {
+      await message.edit({ embeds: [giveawayEmbed(ended)], components: [] });
+    } catch {
+      /* message may be gone */
+    }
+  }
+
+  const text = winners.length
+    ? config.giveaway.winners.replace('{winners}', winners.map((w) => `<@${w}>`).join(', '))
+    : config.giveaway.noEntries;
+
+  try {
+    await channel.send({ content: text, allowedMentions: { parse: [] } });
+  } catch {
+    /* no permission */
+  }
+}
+
+async function restoreGiveaways() {
+  for (const g of Object.values(giveaways.all())) {
+    if (g.ended) continue;
+    const ms = Number(g.endsAt) - Date.now();
+    if (ms <= 0) {
+      await endGiveaway(g.id);
+    } else {
+      setTimeout(() => endGiveaway(g.id), ms);
+    }
+  }
+}
+
+async function createGiveaway(interaction) {
+  const prize = interaction.options.getString('prize', true).trim();
+  const minutes = interaction.options.getInteger('duration', true);
+  const winners = interaction.options.getInteger('winners') || 1;
+  const channel = interaction.options.getChannel('channel') || interaction.channel;
+  const role = interaction.options.getRole('role');
+
+  if (!channel?.isTextBased()) {
+    return reply(interaction, { content: '⚠️ צריך לבחור ערוץ טקסט.' });
+  }
+
+  const id = `gw_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const g = {
+    id,
+    guildId: interaction.guild.id,
+    channelId: channel.id,
+    prize,
+    winners,
+    endsAt: Date.now() + minutes * 60_000,
+    roleId: role?.id || null,
+    entrants: [],
+    ended: false,
+    hostId: interaction.user.id,
+    hostTag: interaction.user.tag,
+  };
+
+  giveaways.set(id, g);
+
+  let message;
+  try {
+    message = await channel.send({ embeds: [giveawayEmbed(g)], components: giveawayComponents(g) });
+  } catch (err) {
+    giveaways.remove(id);
+    console.error('[giveaway] send:', err.message);
+    return reply(interaction, { content: '❌ אין לי הרשאה לשלוח בערוץ הזה.' });
+  }
+
+  giveaways.set(id, { messageId: message.id });
+  setTimeout(() => endGiveaway(id), minutes * 60_000);
+
+  return reply(interaction, {
+    content: `✅ ההגרלה נוצרה בערוץ <#${channel.id}>.\nמזהה הודעה: \`${message.id}\``,
+  });
+}
+
+async function enterGiveaway(interaction) {
+  const id = interaction.customId.slice('giveaway_enter:'.length);
+  const g = giveaways.get(id);
+
+  if (!g || g.ended) {
+    return interaction.reply({ content: '⚠️ ההגרלה כבר הסתיימה.', ephemeral: true }).catch(() => {});
+  }
+
+  if (g.roleId && !interaction.member?.roles?.cache?.has(g.roleId)) {
+    return interaction.reply({ content: config.giveaway.roleRequired, ephemeral: true }).catch(() => {});
+  }
+
+  const entrants = new Set(g.entrants || []);
+  if (entrants.has(interaction.user.id)) {
+    return interaction.reply({ content: config.giveaway.already, ephemeral: true }).catch(() => {});
+  }
+
+  entrants.add(interaction.user.id);
+  giveaways.set(id, { entrants: [...entrants] });
+
+  await interaction.reply({ content: config.giveaway.entered, ephemeral: true }).catch(() => {});
+  await refreshGiveawayMessage({ ...g, entrants: [...entrants] });
+}
+
+async function giveawayByMessage(interaction) {
+  const messageId = interaction.options.getString('id', true).trim();
+  return Object.values(giveaways.all()).find(
+    (g) => g.messageId === messageId && g.guildId === interaction.guild.id
+  );
+}
+
+async function rerollGiveaway(interaction) {
+  const g = await giveawayByMessage(interaction);
+  if (!g) return reply(interaction, { content: '⚠️ לא נמצאה הגרלה עם המזהה הזה.' });
+
+  const excluded = g.rerollWinners || [];
+  const [winnerId] = pickWinners(g.entrants || [], 1, excluded);
+  if (!winnerId) return reply(interaction, { content: config.giveaway.noReroll });
+
+  giveaways.set(g.id, { rerollWinners: [...excluded, winnerId] });
+
+  const channel = await client.channels.fetch(g.channelId).catch(() => null);
+  if (channel) {
+    try {
+      await channel.send({
+        content: config.giveaway.rerollWinner.replace('{winner}', `<@${winnerId}>`),
+        allowedMentions: { parse: [] },
+      });
+    } catch {
+      /* no permission */
+    }
+  }
+
+  return reply(interaction, {
+    content: config.giveaway.rerollWinner.replace('{winner}', `<@${winnerId}>`),
+  });
+}
+
+async function listGiveaways(interaction) {
+  const open = Object.values(giveaways.all()).filter(
+    (g) => g.guildId === interaction.guild.id && !g.ended
+  );
+  const lines = open.map(
+    (g) =>
+      `• **${g.prize}** — <#${g.channelId}> — \`${g.messageId}\` — <t:${Math.floor(g.endsAt / 1000)}:R>`
+  );
+  return reply(interaction, {
+    content: lines.length ? `**הגרלות פתוחות:**\n${lines.join('\n')}` : 'אין הגרלות פתוחות כרגע.',
+  });
+}
+
+/* ------------------------------------------------------------------ */
 /* AutoMod — Discord-native link + NSFW rules                          */
 /* ------------------------------------------------------------------ */
 
@@ -1063,6 +1278,7 @@ oauthServer.start(async (user, guildId) => {
 
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Logged in as ${c.user.tag}`);
+  await restoreGiveaways();
   console.log(`   Tickets category: ${config.ids.category || 'NOT SET'}`);
   console.log(`   Support roles: ${config.ids.supportRoles.join(', ') || 'NOT SET'}`);
 
@@ -1236,6 +1452,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
             embeds: [buildWelcomeEmbed(user, interaction.guild)],
             ephemeral: false,
           });
+        }
+
+        case 'giveaway': {
+          const sub = interaction.options.getSubcommand();
+          if (sub === 'start') return await createGiveaway(interaction);
+          if (sub === 'end') {
+            const g = await giveawayByMessage(interaction);
+            if (!g) return reply(interaction, { content: '⚠️ לא נמצאה הגרלה עם המזהה הזה.' });
+            await endGiveaway(g.id);
+            return reply(interaction, { content: '✅ ההגרלה נסגרה.' });
+          }
+          if (sub === 'reroll') return await rerollGiveaway(interaction);
+          if (sub === 'list') return await listGiveaways(interaction);
+          return reply(interaction, { content: '⚠️ פעולה לא מוכרת.' });
         }
 
         case 'beautify':
@@ -2014,6 +2244,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isModalSubmit() && interaction.customId === 'ticket_rename_modal') {
       await applyRename(interaction);
+      return;
+    }
+
+    if (interaction.isButton() && interaction.customId.startsWith('giveaway_enter:')) {
+      await enterGiveaway(interaction);
       return;
     }
 

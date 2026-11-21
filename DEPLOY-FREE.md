@@ -35,11 +35,12 @@
 | `ENABLE_MEMBERS_INTENT` | `true` |
 | `AUTO_DEPLOY_COMMANDS` | `true` |
 | `GUILDS_JSON` | תוכן קובץ `guilds.json` שלכם (הדביקו כמחרוזת אחת) — שומר על ההגדרות אחרי ריסטארט |
+| `GIVEAWAYS_JSON` | **אופציונלי** — תוכן קובץ `giveaways.json` לשחזור הגרלות אחרי ריסטארט (השרת שומר לבד ב־`/app/data`) |
 
 5. לחצו **Create Web Service** וחכו לבנייה (כמה דקות).
 6. כשהסטטוס יהיה **Live**, פתחו:
    ```
-   https://bots-xinzon.onrender.com/health
+   https://bots-xinz.onrender.com/health
    ```
    צריך לחזור `ok`.
 
@@ -50,7 +51,7 @@
 1. https://discord.com/developers/applications/1572355509502218270/oauth2
 2. תחת **Redirects**, הוסיפו בדיוק:
    ```
-   https://bots-xinzon.onrender.com/callback
+   https://bots-xinz.onrender.com/callback
    ```
 3. **Save Changes**.
 4. מחקו את הישן (כתובת ה־Cloudflare tunnel) אם הוא כבר לא פעיל.
@@ -63,7 +64,7 @@
 2. **Add New Monitor**:
    - Monitor Type: **HTTP(s)**
    - Friendly Name: `Shomer Havoda`
-   - URL: `https://bots-xinzon.onrender.com/health`
+   - URL: `https://bots-xinz.onrender.com/health`
    - Monitoring Interval: **5 minutes** (מותר בחינם)
 3. שמרו. מעכשיו הבוט יישאר ער.
 

@@ -315,6 +315,53 @@ const commands = [
       o.setName('reset').setDescription('חזרה להגדרות השרת')
     )
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('giveaway')
+    .setDescription('ניהול הגרלות בשרת')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) =>
+      s
+        .setName('start')
+        .setDescription('פתיחת הגרלה חדשה')
+        .addStringOption((o) =>
+          o.setName('prize').setDescription('מה הפרס').setRequired(true).setMaxLength(200)
+        )
+        .addIntegerOption((o) =>
+          o
+            .setName('duration')
+            .setDescription('משך ההגרלה בדקות')
+            .setRequired(true)
+            .setMinValue(1)
+            .setMaxValue(10080)
+        )
+        .addIntegerOption((o) =>
+          o.setName('winners').setDescription('כמה זוכים (1-10)').setMinValue(1).setMaxValue(10)
+        )
+        .addChannelOption((o) =>
+          o.setName('channel').setDescription('הערוץ שבו תופיע ההגרלה')
+        )
+        .addRoleOption((o) =>
+          o.setName('role').setDescription('תפקיד נדרש כדי להיכנס')
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('end')
+        .setDescription('סגירת הגרלה מוקדם')
+        .addStringOption((o) =>
+          o.setName('id').setDescription('מזהה ההודעה של ההגרלה').setRequired(true)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('reroll')
+        .setDescription('הגרלה מחדש מתוך המשתתפים')
+        .addStringOption((o) =>
+          o.setName('id').setDescription('מזהה ההודעה של ההגרלה').setRequired(true)
+        )
+    )
+    .addSubcommand((s) => s.setName('list').setDescription('רשימת הגרלות פתוחות'))
+    .toJSON(),
 ];
 
 const { DISCORD_TOKEN, CLIENT_ID, GUILD_ID, INSTANT_GUILD_IDS } = process.env;
