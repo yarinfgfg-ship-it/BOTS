@@ -111,8 +111,9 @@ function buildWelcomeEmbed(user, guild) {
     .setImage(user.displayAvatarURL({ size: 4096, extension: 'png' }));
 }
 
-// Turns plain text into a natural-looking Discord message (no embed):
-// # big title, ## section headings, 🔹 bullets, -# small subtext.
+// Turns plain text into a normal Discord message — like a person typed it.
+// No embed, no banner title, no divider, no bot footer. Bold only for real
+// headings, simple bullets, original wording kept intact.
 const BEAUTIFY_EMOJIS = [
   [/(ברוכים|welcome|היי|שלום|hello)/i, '🎉'],
   [/(אזהרה|חשוב|שים לב|warning|alert|critical)/i, '⚠️'],
@@ -160,33 +161,30 @@ function buildBeautifiedText(rawText, customTitle) {
     if (isHeading(line)) {
       const heading = cleanHeading(line);
       if (!firstHeading) firstHeading = heading;
-      body.push('', `## ${beautifyEmoji(heading) || '✨'} ${heading}`);
+      body.push(`**${heading}**`);
       continue;
     }
 
     const bullet = /^([-*•]|\d+[.)])\s+(.*)$/.exec(line);
     if (bullet) {
-      body.push(`🔹 ${bullet[2]}`);
+      body.push(`• ${bullet[2]}`);
     } else {
-      const emoji = beautifyEmoji(line);
-      body.push(emoji ? `${emoji} ${line}` : line);
+      body.push(line);
     }
   }
 
-  const title = (customTitle || firstHeading || config.beautify.defaultTitle).slice(0, 80);
-  const titleEmoji = beautifyEmoji(title);
+  const out = [];
+  const title = (customTitle || firstHeading).trim();
+  if (title) {
+    const emoji = beautifyEmoji(title);
+    out.push(`**${emoji ? `${emoji} ` : ''}${title}**`);
+    // Don't repeat the same heading twice when it was used as the title.
+    if (firstHeading && title === firstHeading && body[0] === `**${firstHeading}**`) {
+      body.shift();
+    }
+  }
 
-  const out = [
-    `# ${titleEmoji || '✨'} ${title}`,
-    '',
-    config.beautify.subtitle,
-    '',
-    ...body,
-    '',
-    config.beautify.divider,
-    `-# ${config.beautify.footer}`,
-  ];
-
+  out.push(...body);
   return out.join('\n').slice(0, 1900);
 }
 
