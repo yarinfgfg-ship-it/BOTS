@@ -28,6 +28,7 @@ const profiles = require('./src/profiles');
 const oauth = require('./src/oauth');
 const oauthServer = require('./src/oauthServer');
 const giveaways = require('./src/giveaways');
+const community = require('./src/community');
 const { buildWinnerCard } = require('./src/winnerCard');
 
 // GuildMembers is required for the automatic welcome message on join.
@@ -1213,6 +1214,381 @@ async function listGiveaways(interaction) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Suggestions & Polls                                                  */
+/* ------------------------------------------------------------------ */
+
+const POLL_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
+
+function isStaff(interaction) {
+  return (
+    OWNER_IDS.includes(interaction.user.id) ||
+    Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild))
+  );
+}
+
+function suggestionEmbed(s) {
+  const status =
+    s.status === 'approved'
+      ? config.community.statusApproved
+      : s.status === 'denied'
+        ? config.community.statusDenied
+        : config.community.statusOpen;
+  const color =
+    s.status === 'approved' ? '#57F287' : s.status === 'denied' ? '#ED4245' : config.community.color;
+  return new EmbedBuilder()
+    .setColor(color)
+    .setTitle(config.community.suggestionTitle)
+    .setDescription(s.text)
+    .addFields(
+      { name: 'סטטוס', value: status, inline: true },
+      {
+        name: 'הצבעות',
+        value: config.community.votes
+          .replace('{up}', s.votes?.up || 0)
+          .replace('{down}', s.votes?.down || 0),
+        inline: true,
+      },
+      {
+        name: 'הוגש ע׳י',
+        value: config.community.suggestionBy.replace('{user}', `<@${s.authorId}>`),
+        inline: false,
+      }
+    )
+    .setTimestamp(new Date(s.createdAt || Date.now()));
+}
+
+function suggestionComponents(s) {
+  const disabled = s.status !== 'open';
+  return [
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`sug_up:${s.id}`)
+        .setLabel('👍')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(disabled),
+      new ButtonBuilder()
+        .setCustomId(`sug_down:${s.id}`)
+        .setLabel('👎')
+        .setStyle(ButtonStyle.Secondary)
+        .setDisabled(disabled),
+      new ButtonBuilder()
+        .setCustomId(`sug_approve:${s.id}`)
+        .setLabel('✅ אישור')
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(disabled),
+      new ButtonBuilder()
+        .setCustomId(`sug_deny:${s.id}`)
+        .setLabel('❌ דחייה')
+        .setStyle(ButtonStyle.Danger)
+        .setDisabled(disabled)
+    ),
+  ];
+}
+
+function pollCounts(p) {
+  const counts = p.options.map(() => 0);
+  for (const choice of Object.values(p.voters || {})) {
+    if (Number.isInteger(choice) && counts[choice] !== undefined) counts[choice] += 1;
+  }
+  return counts;
+}
+
+function pollEmbed(p) {
+  const counts = pollCounts(p);
+  const total = counts.reduce((a, b) => a + b, 0);
+  const lines = p.options.map((option, i) => {
+    const pct = total ? Math.round((counts[i] / total) * 100) : 0;
+    const filled = Math.round(pct / 10);
+    const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
+    return `${i + 1}. **${option}** — ${counts[i]} (${pct}%)\n\`${bar}\``;
+  });
+  const status = p.closed
+    ? config.community.pollEnded
+    : config.community.pollOpen.replace('{time}', Math.floor(p.endsAt / 1000));
+
+  return new EmbedBuilder()
+    .setColor(p.closed ? '#80848E' : config.community.pollColor)
+    .setTitle(config.community.pollTitle.replace('{question}', p.question))
+    .setDescription(
+      `${lines.join('\n\n')}\n\n${config.community.pollTotal.replace('{total}', total)}\n${status}`
+    )
+    .setFooter({ text: config.community.pollBy.replace('{user}', p.authorTag || 'צוות') })
+    .setTimestamp(new Date(p.createdAt || Date.now()));
+}
+
+function pollComponents(p) {
+  if (p.closed) return [];
+  return [
+    new ActionRowBuilder().addComponents(
+      ...p.options.map((option, i) =>
+        new ButtonBuilder()
+          .setCustomId(`poll_vote:${p.id}:${i}`)
+          .setLabel(`${POLL_EMOJIS[i]} ${option.slice(0, 55)}`)
+          .setStyle(ButtonStyle.Primary)
+      )
+    ),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId(`poll_close:${p.id}`)
+        .setLabel('⏹️ סגור הצבעה')
+        .setStyle(ButtonStyle.Danger)
+    ),
+  ];
+}
+
+async function refreshSuggestion(s) {
+  const channel = await client.channels.fetch(s.channelId).catch(() => null);
+  if (!channel) return;
+  const message = await channel.messages.fetch(s.messageId).catch(() => null);
+  if (!message) return;
+  try {
+    await message.edit({ embeds: [suggestionEmbed(s)], components: suggestionComponents(s) });
+  } catch {
+    /* message gone */
+  }
+}
+
+async function refreshPoll(p) {
+  const channel = await client.channels.fetch(p.channelId).catch(() => null);
+  if (!channel) return;
+  const message = await channel.messages.fetch(p.messageId).catch(() => null);
+  if (!message) return;
+  try {
+    await message.edit({ embeds: [pollEmbed(p)], components: pollComponents(p) });
+  } catch {
+    /* message gone */
+  }
+}
+
+async function createSuggestion(interaction) {
+  const text = interaction.options.getString('text', true).trim();
+  const settings = community.setting(interaction.guild.id);
+  if (!settings?.channelId) return reply(interaction, { content: config.community.noChannel });
+
+  const channel = await client.channels.fetch(settings.channelId).catch(() => null);
+  if (!channel?.isTextBased()) return reply(interaction, { content: config.community.noChannel });
+
+  const id = `s_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const s = {
+    id,
+    guildId: interaction.guild.id,
+    channelId: channel.id,
+    authorId: interaction.user.id,
+    authorTag: interaction.user.tag,
+    text,
+    status: 'open',
+    votes: { up: 0, down: 0 },
+    voters: {},
+    createdAt: Date.now(),
+  };
+
+  const data = community.load();
+  data.suggestions[id] = s;
+  community.save(data);
+
+  let message;
+  try {
+    message = await channel.send({ embeds: [suggestionEmbed(s)], components: suggestionComponents(s) });
+  } catch {
+    const fresh = community.load();
+    delete fresh.suggestions[id];
+    community.save(fresh);
+    console.error('[suggest] send failed');
+    return reply(interaction, { content: '❌ אין לי הרשאה לשלוח בערוץ הזה.' });
+  }
+
+  community.update('suggestions', id, { messageId: message.id });
+  return reply(interaction, { content: `✅ ההצעה נשלחה ל־<#${channel.id}>.` });
+}
+
+async function voteSuggestion(interaction, id, kind) {
+  const data = community.load();
+  const s = data.suggestions[id];
+  if (!s || s.status !== 'open') {
+    return interaction.reply({ content: '⚠️ ההצעה כבר לא פתוחה.', ephemeral: true }).catch(() => {});
+  }
+
+  const uid = interaction.user.id;
+  const previous = s.voters[uid];
+  if (previous === kind) {
+    delete s.voters[uid];
+    s.votes[previous] -= 1;
+  } else {
+    if (previous) s.votes[previous] -= 1;
+    s.voters[uid] = kind;
+    s.votes[kind] = (s.votes[kind] || 0) + 1;
+  }
+
+  community.save(data);
+  await interaction.reply({ content: config.community.voted, ephemeral: true }).catch(() => {});
+  await refreshSuggestion(s);
+}
+
+async function decideSuggestion(interaction, id, status) {
+  if (!isStaff(interaction)) {
+    return interaction.reply({ content: config.community.notStaff, ephemeral: true }).catch(() => {});
+  }
+  const s = community.load().suggestions[id];
+  if (!s || s.status !== 'open') {
+    return interaction.reply({ content: '⚠️ ההצעה כבר לא פתוחה.', ephemeral: true }).catch(() => {});
+  }
+
+  const updated = community.update('suggestions', id, {
+    status,
+    decidedBy: interaction.user.id,
+    decidedAt: Date.now(),
+  });
+  await interaction
+    .reply({
+      content: status === 'approved' ? config.community.approved : config.community.denied,
+      ephemeral: true,
+    })
+    .catch(() => {});
+  await refreshSuggestion(updated);
+}
+
+async function createPoll(interaction) {
+  const question = interaction.options.getString('question', true).trim();
+  const options = ['option1', 'option2', 'option3', 'option4']
+    .map((name) => (interaction.options.getString(name) || '').trim())
+    .filter(Boolean);
+
+  if (options.length < 2) {
+    return reply(interaction, { content: '⚠️ צריך לפחות שתי אפשרויות.' });
+  }
+  const minutes = interaction.options.getInteger('duration') || 10;
+  const channel = interaction.channel;
+
+  const id = `p_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
+  const p = {
+    id,
+    guildId: interaction.guild.id,
+    channelId: channel.id,
+    question,
+    options,
+    voters: {},
+    closed: false,
+    endsAt: Date.now() + minutes * 60_000,
+    authorId: interaction.user.id,
+    authorTag: interaction.user.tag,
+    createdAt: Date.now(),
+  };
+
+  const data = community.load();
+  data.polls[id] = p;
+  community.save(data);
+
+  let message;
+  try {
+    message = await channel.send({ embeds: [pollEmbed(p)], components: pollComponents(p) });
+  } catch {
+    const fresh = community.load();
+    delete fresh.polls[id];
+    community.save(fresh);
+    console.error('[poll] send failed');
+    return reply(interaction, { content: '❌ אין לי הרשאה לשלוח בערוץ הזה.' });
+  }
+
+  community.update('polls', id, { messageId: message.id });
+  setTimeout(() => closePoll(id), minutes * 60_000);
+
+  return reply(interaction, {
+    content: `✅ ההצבעה נוצרה. מזהה הודעה: \`${message.id}\``,
+  });
+}
+
+async function votePoll(interaction, id, index) {
+  const data = community.load();
+  const p = data.polls[id];
+  if (!p || p.closed || p.options[index] === undefined) {
+    return interaction.reply({ content: '⚠️ ההצבעה כבר סגורה.', ephemeral: true }).catch(() => {});
+  }
+
+  const uid = interaction.user.id;
+  if (p.voters[uid] === index) delete p.voters[uid];
+  else p.voters[uid] = index;
+
+  community.save(data);
+  await interaction.reply({ content: config.community.pollVoted, ephemeral: true }).catch(() => {});
+  await refreshPoll(p);
+}
+
+function pollResultText(p) {
+  const counts = pollCounts(p);
+  const total = counts.reduce((a, b) => a + b, 0);
+  if (!total) return config.community.pollNoVotes;
+
+  const max = Math.max(...counts);
+  const winners = counts
+    .map((count, i) => (count === max ? p.options[i] : null))
+    .filter(Boolean);
+  if (winners.length > 1) {
+    return config.community.pollTie.replace('{options}', winners.join(' / '));
+  }
+  const index = counts.indexOf(max);
+  return config.community.pollWinner
+    .replace('{option}', p.options[index])
+    .replace('{votes}', max);
+}
+
+async function closePoll(id) {
+  const data = community.load();
+  const p = data.polls[id];
+  if (!p || p.closed) return;
+
+  const closed = community.update('polls', id, { closed: true, closedAt: Date.now() });
+  await refreshPoll(closed);
+
+  const channel = await client.channels.fetch(closed.channelId).catch(() => null);
+  if (channel) {
+    try {
+      await channel.send({ content: pollResultText(closed), allowedMentions: { parse: [] } });
+    } catch {
+      /* no permission */
+    }
+  }
+}
+
+function findPollByMessage(interaction) {
+  const messageId = interaction.options.getString('id', true).trim();
+  return Object.values(community.load().polls).find(
+    (p) => p.messageId === messageId && p.guildId === interaction.guild.id
+  );
+}
+
+async function restoreCommunity() {
+  for (const p of Object.values(community.load().polls)) {
+    if (p.closed) continue;
+    const ms = Number(p.endsAt) - Date.now();
+    if (ms <= 0) await closePoll(p.id);
+    else setTimeout(() => closePoll(p.id), ms);
+  }
+}
+
+async function handleCommunityButton(interaction) {
+  const id = interaction.customId;
+
+  if (id.startsWith('sug_up:')) return voteSuggestion(interaction, id.slice(7), 'up');
+  if (id.startsWith('sug_down:')) return voteSuggestion(interaction, id.slice(9), 'down');
+  if (id.startsWith('sug_approve:')) return decideSuggestion(interaction, id.slice(12), 'approved');
+  if (id.startsWith('sug_deny:')) return decideSuggestion(interaction, id.slice(9), 'denied');
+
+  if (id.startsWith('poll_vote:')) {
+    const [, pollId, index] = id.split(':');
+    return votePoll(interaction, pollId, Number(index));
+  }
+  if (id.startsWith('poll_close:')) {
+    if (!isStaff(interaction)) {
+      return interaction.reply({ content: config.community.notStaff, ephemeral: true }).catch(() => {});
+    }
+    const pollId = id.slice(11);
+    await closePoll(pollId);
+    return interaction.reply({ content: config.community.pollClosed, ephemeral: true }).catch(() => {});
+  }
+  return false;
+}
+
+/* ------------------------------------------------------------------ */
 /* AutoMod — Discord-native link + NSFW rules                          */
 /* ------------------------------------------------------------------ */
 
@@ -1307,6 +1683,7 @@ oauthServer.start(async (user, guildId) => {
 client.once(Events.ClientReady, async (c) => {
   console.log(`✅ Logged in as ${c.user.tag}`);
   await restoreGiveaways();
+  await restoreCommunity();
   console.log(`   Tickets category: ${config.ids.category || 'NOT SET'}`);
   console.log(`   Support roles: ${config.ids.supportRoles.join(', ') || 'NOT SET'}`);
 
@@ -1480,6 +1857,39 @@ client.on(Events.InteractionCreate, async (interaction) => {
             embeds: [buildWelcomeEmbed(user, interaction.guild)],
             ephemeral: false,
           });
+        }
+
+        case 'suggestion-setup': {
+          if (interaction.options.getBoolean('clear')) {
+            community.setSetting(interaction.guild.id, { channelId: null });
+            return reply(interaction, { content: '✅ ערוץ ההצעות בוטל.' });
+          }
+          const channel = interaction.options.getChannel('channel') || interaction.channel;
+          if (!channel?.isTextBased()) {
+            return reply(interaction, { content: '⚠️ צריך לבחור ערוץ טקסט.' });
+          }
+          community.setSetting(interaction.guild.id, { channelId: channel.id });
+          return reply(interaction, { content: `✅ ערוץ ההצעות נקבע ל־<#${channel.id}>.` });
+        }
+
+        case 'suggest':
+          return await createSuggestion(interaction);
+
+        case 'poll': {
+          const sub = interaction.options.getSubcommand();
+          if (sub === 'create') return await createPoll(interaction);
+          if (sub === 'close') {
+            const p = findPollByMessage(interaction);
+            if (!p) return reply(interaction, { content: '⚠️ לא נמצאה הצבעה עם המזהה הזה.' });
+            await closePoll(p.id);
+            return reply(interaction, { content: config.community.pollClosed });
+          }
+          if (sub === 'results') {
+            const p = findPollByMessage(interaction);
+            if (!p) return reply(interaction, { content: '⚠️ לא נמצאה הצבעה עם המזהה הזה.' });
+            return reply(interaction, { content: pollResultText(p) });
+          }
+          return reply(interaction, { content: '⚠️ פעולה לא מוכרת.' });
         }
 
         case 'giveaway': {
@@ -2273,6 +2683,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isModalSubmit() && interaction.customId === 'ticket_rename_modal') {
       await applyRename(interaction);
       return;
+    }
+
+    if (interaction.isButton()) {
+      const handled = await handleCommunityButton(interaction);
+      if (handled !== false) return;
     }
 
     if (interaction.isButton() && interaction.customId.startsWith('giveaway_enter:')) {

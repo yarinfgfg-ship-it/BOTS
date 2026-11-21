@@ -316,6 +316,58 @@ const commands = [
     )
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('suggestion-setup')
+    .setDescription('הגדרת ערוץ ההצעות')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addChannelOption((o) => o.setName('channel').setDescription('הערוץ שבו יופיעו ההצעות'))
+    .addBooleanOption((o) => o.setName('clear').setDescription('ביטול הערוץ המוגדר'))
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('suggest')
+    .setDescription('שליחת הצעה לצוות')
+    .addStringOption((o) =>
+      o.setName('text').setDescription('תוכן ההצעה').setRequired(true).setMaxLength(1000)
+    )
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('poll')
+    .setDescription('יצירה וניהול של הצבעות')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) =>
+      s
+        .setName('create')
+        .setDescription('פתיחת הצבעה חדשה')
+        .addStringOption((o) =>
+          o.setName('question').setDescription('השאלה').setRequired(true).setMaxLength(200)
+        )
+        .addStringOption((o) =>
+          o.setName('option1').setDescription('אפשרות 1').setRequired(true).setMaxLength(100)
+        )
+        .addStringOption((o) => o.setName('option2').setDescription('אפשרות 2').setMaxLength(100))
+        .addStringOption((o) => o.setName('option3').setDescription('אפשרות 3').setMaxLength(100))
+        .addStringOption((o) => o.setName('option4').setDescription('אפשרות 4').setMaxLength(100))
+        .addIntegerOption((o) =>
+          o
+            .setName('duration')
+            .setDescription('משך ההצבעה בדקות (ברירת מחדל 10)')
+            .setMinValue(1)
+            .setMaxValue(10080)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('close')
+        .setDescription('סגירת הצבעה מוקדם')
+        .addStringOption((o) => o.setName('id').setDescription('מזהה הודעת ההצבעה').setRequired(true))
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('results')
+        .setDescription('תוצאות ההצבעה')
+        .addStringOption((o) => o.setName('id').setDescription('מזהה הודעת ההצבעה').setRequired(true))
+    )
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('giveaway')
     .setDescription('ניהול הגרלות בשרת')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)

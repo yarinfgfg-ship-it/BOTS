@@ -36,6 +36,7 @@
 | `AUTO_DEPLOY_COMMANDS` | `true` |
 | `GUILDS_JSON` | תוכן קובץ `guilds.json` שלכם (הדביקו כמחרוזת אחת) — שומר על ההגדרות אחרי ריסטארט |
 | `GIVEAWAYS_JSON` | **אופציונלי** — תוכן קובץ `giveaways.json` לשחזור הגרלות אחרי ריסטארט (השרת שומר לבד ב־`/app/data`) |
+| `SUGGESTIONS_JSON` | **אופציונלי** — תוכן קובץ `suggestions.json` לשחזור הצעות והצבעות אחרי ריסטארט |
 
 5. לחצו **Create Web Service** וחכו לבנייה (כמה דקות).
 6. כשהסטטוס יהיה **Live**, פתחו:
