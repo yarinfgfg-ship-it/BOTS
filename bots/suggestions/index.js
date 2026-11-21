@@ -56,6 +56,24 @@ const update = (kind, id, values) => {
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const POLL_EMOJIS = ['1️⃣', '2️⃣', '3️⃣', '4️⃣'];
+const TIME_MINUTES = {
+  '5': 5,
+  '15': 15,
+  '30': 30,
+  '60': 60,
+  '180': 180,
+  '1440': 1440,
+  '10080': 10080,
+};
+const TIME_CHOICES = [
+  { name: '5 דקות', value: '5' },
+  { name: '15 דקות', value: '15' },
+  { name: '30 דקות', value: '30' },
+  { name: 'שעה', value: '60' },
+  { name: '3 שעות', value: '180' },
+  { name: '24 שעות', value: '1440' },
+  { name: '7 ימים', value: '10080' },
+];
 
 const commands = [
   new SlashCommandBuilder()
@@ -63,6 +81,12 @@ const commands = [
     .setDescription('הגדרת ערוץ ההצעות')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addChannelOption((o) => o.setName('channel').setDescription('הערוץ שבו יופיעו ההצעות'))
+    .addStringOption((o) =>
+      o
+        .setName('auto')
+        .setDescription('זמן עד להכרעה אוטומטית לפי רוב הקולות')
+        .addChoices({ name: 'ללא — רק צוות מחליט', value: '0' }, ...TIME_CHOICES)
+    )
     .addBooleanOption((o) => o.setName('clear').setDescription('ביטול הערוץ המוגדר'))
     .toJSON(),
   new SlashCommandBuilder()
@@ -84,18 +108,18 @@ const commands = [
           o.setName('question').setDescription('השאלה').setRequired(true).setMaxLength(200)
         )
         .addStringOption((o) =>
+          o
+            .setName('duration')
+            .setDescription('משך ההצבעה — בוחרים מתפריט')
+            .setRequired(true)
+            .addChoices(...TIME_CHOICES)
+        )
+        .addStringOption((o) =>
           o.setName('option1').setDescription('אפשרות 1').setRequired(true).setMaxLength(100)
         )
         .addStringOption((o) => o.setName('option2').setDescription('אפשרות 2').setMaxLength(100))
         .addStringOption((o) => o.setName('option3').setDescription('אפשרות 3').setMaxLength(100))
         .addStringOption((o) => o.setName('option4').setDescription('אפשרות 4').setMaxLength(100))
-        .addIntegerOption((o) =>
-          o
-            .setName('duration')
-            .setDescription('משך ההצבעה בדקות (ברירת מחדל 10)')
-            .setMinValue(1)
-            .setMaxValue(10080)
-        )
     )
     .addSubcommand((s) =>
       s
@@ -110,6 +134,14 @@ const commands = [
         .addStringOption((o) => o.setName('id').setDescription('מזהה הודעה').setRequired(true))
     )
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('staff-hide')
+    .setDescription('הסתרת פקודות צוות ממשתמשים רגילים')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addRoleOption((o) =>
+      o.setName('role').setDescription('תפקיד הצוות שיראה את הפקודות').setRequired(true)
+    )
+    .toJSON(),
 ];
 
 async function reply(interaction, payload) {
@@ -122,7 +154,18 @@ function isStaff(interaction) {
   return Boolean(interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild));
 }
 
+function voteBar(up, down, size = 12) {
+  const total = up + down;
+  const upPart = total ? Math.round((up / total) * size) : 0;
+  return '🟩'.repeat(upPart) + '⬜'.repeat(size - upPart);
+}
+
 function suggestionEmbed(s) {
+  const up = s.votes?.up || 0;
+  const down = s.votes?.down || 0;
+  const total = up + down;
+  const upPct = total ? Math.round((up / total) * 100) : 0;
+  const downPct = total ? 100 - upPct : 0;
   const status =
     s.status === 'approved'
       ? config.statusApproved
@@ -131,25 +174,31 @@ function suggestionEmbed(s) {
         : config.statusOpen;
   const color =
     s.status === 'approved' ? '#57F287' : s.status === 'denied' ? '#ED4245' : config.color;
+  const autoLine =
+    s.endsAt && s.status === 'open'
+      ? `\n${config.autoTime.replace('{time}', Math.floor(s.endsAt / 1000))}`
+      : '';
+  const votesText = config.votes
+    .replace('{up}', up)
+    .replace('{down}', down)
+    .replace('{upPct}', upPct)
+    .replace('{downPct}', downPct)
+    .replace('{bar}', voteBar(up, down));
+
   return new EmbedBuilder()
     .setColor(color)
-    .setTitle(config.suggestionTitle)
-    .setDescription(s.text)
+    .setAuthor({ name: config.suggestionTitle, iconURL: client.user?.displayAvatarURL() })
+    .setDescription(`> ${s.text}`)
     .addFields(
-      { name: 'סטטוס', value: status, inline: true },
+      { name: config.suggestionStatusLabel, value: status + autoLine, inline: true },
+      { name: config.suggestionVotesLabel, value: votesText, inline: true },
       {
-        name: 'הצבעות',
-        value: config.votes
-          .replace('{up}', s.votes?.up || 0)
-          .replace('{down}', s.votes?.down || 0),
-        inline: true,
-      },
-      {
-        name: 'הוגש ע׳י',
+        name: config.suggestionByLabel,
         value: config.suggestionBy.replace('{user}', `<@${s.authorId}>`),
         inline: false,
       }
     )
+    .setFooter({ text: config.suggestionFooter.replace('{id}', s.id.slice(-6)) })
     .setTimestamp(new Date(s.createdAt || Date.now()));
 }
 
@@ -195,8 +244,8 @@ function pollEmbed(p) {
   const lines = p.options.map((option, i) => {
     const pct = total ? Math.round((counts[i] / total) * 100) : 0;
     const filled = Math.round(pct / 10);
-    const bar = '█'.repeat(filled) + '░'.repeat(10 - filled);
-    return `${i + 1}. **${option}** — ${counts[i]} (${pct}%)\n\`${bar}\``;
+    const bar = '🟦'.repeat(filled) + '⬜'.repeat(10 - filled);
+    return `${POLL_EMOJIS[i]} **${option}**\n\`${bar}\` ${counts[i]} קולות · ${pct}%`;
   });
   const status = p.closed
     ? config.pollEnded
@@ -204,11 +253,25 @@ function pollEmbed(p) {
 
   return new EmbedBuilder()
     .setColor(p.closed ? '#80848E' : config.pollColor)
-    .setTitle(`📊 ${p.question}`)
-    .setDescription(
-      `${lines.join('\n\n')}\n\n${config.pollTotal.replace('{total}', total)}\n${status}`
+    .setAuthor({
+      name: p.closed ? config.pollHeaderClosed : config.pollHeaderOpen,
+      iconURL: client.user?.displayAvatarURL(),
+    })
+    .setTitle(`❓ ${p.question}`)
+    .setDescription(lines.join('\n\n'))
+    .addFields(
+      {
+        name: '📊 סיכום',
+        value: `${config.pollTotal.replace('{total}', total)}\n${status}`,
+        inline: false,
+      },
+      {
+        name: '👤 יוזם ההצבעה',
+        value: config.pollBy.replace('{user}', `<@${p.authorId}>`),
+        inline: false,
+      }
     )
-    .setFooter({ text: config.pollBy.replace('{user}', p.authorTag || 'צוות') })
+    .setFooter({ text: config.suggestionFooter.replace('{id}', p.id.slice(-6)) })
     .setTimestamp(new Date(p.createdAt || Date.now()));
 }
 
@@ -260,6 +323,7 @@ async function createSuggestion(interaction) {
   const channel = await client.channels.fetch(cfg.channelId).catch(() => null);
   if (!channel?.isTextBased()) return reply(interaction, { content: config.noChannel });
 
+  const autoMinutes = Number(cfg.autoMinutes) || 0;
   const id = `s_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const s = {
     id,
@@ -271,6 +335,7 @@ async function createSuggestion(interaction) {
     status: 'open',
     votes: { up: 0, down: 0 },
     voters: {},
+    endsAt: autoMinutes ? Date.now() + autoMinutes * 60_000 : null,
     createdAt: Date.now(),
   };
 
@@ -289,7 +354,12 @@ async function createSuggestion(interaction) {
   }
 
   update('suggestions', id, { messageId: message.id });
-  return reply(interaction, { content: `✅ ההצעה נשלחה ל־<#${channel.id}>.` });
+  if (autoMinutes) setTimeout(() => autoDecideSuggestion(id), autoMinutes * 60_000);
+  return reply(interaction, {
+    content: autoMinutes
+      ? `✅ ההצעה נשלחה ל־<#${channel.id}>. הכרעה אוטומטית <t:${Math.floor(s.endsAt / 1000)}:R>.`
+      : `✅ ההצעה נשלחה ל־<#${channel.id}>.`,
+  });
 }
 
 async function voteSuggestion(interaction, id, kind) {
@@ -335,6 +405,31 @@ async function decideSuggestion(interaction, id, status) {
   await refreshSuggestion(updated);
 }
 
+async function autoDecideSuggestion(id) {
+  const s = load().suggestions[id];
+  if (!s || s.status !== 'open') return;
+  const up = s.votes?.up || 0;
+  const down = s.votes?.down || 0;
+  const status = up > down ? 'approved' : 'denied';
+  const decided = update('suggestions', id, {
+    status,
+    decidedBy: 'auto',
+    decidedAt: Date.now(),
+    endsAt: null,
+  });
+  await refreshSuggestion(decided);
+  const channel = await client.channels.fetch(decided.channelId).catch(() => null);
+  if (channel) {
+    const text = (status === 'approved' ? config.autoApproved : config.autoDenied).replace(
+      '{text}',
+      decided.text
+    );
+    try {
+      await channel.send({ content: text, allowedMentions: { parse: [] } });
+    } catch {}
+  }
+}
+
 async function createPoll(interaction) {
   const question = interaction.options.getString('question', true).trim();
   const options = ['option1', 'option2', 'option3', 'option4']
@@ -342,7 +437,7 @@ async function createPoll(interaction) {
     .filter(Boolean);
   if (options.length < 2) return reply(interaction, { content: '⚠️ צריך לפחות שתי אפשרויות.' });
 
-  const minutes = interaction.options.getInteger('duration') || 10;
+  const minutes = TIME_MINUTES[interaction.options.getString('duration', true)] || 10;
   const id = `p_${Date.now()}_${crypto.randomBytes(3).toString('hex')}`;
   const p = {
     id,
@@ -424,12 +519,49 @@ function findPollByMessage(interaction) {
 }
 
 async function restore() {
-  for (const p of Object.values(load().polls)) {
+  const data = load();
+  for (const s of Object.values(data.suggestions)) {
+    if (s.status !== 'open' || !s.endsAt) continue;
+    const ms = Number(s.endsAt) - Date.now();
+    if (ms <= 0) await autoDecideSuggestion(s.id);
+    else setTimeout(() => autoDecideSuggestion(s.id), ms);
+  }
+  for (const p of Object.values(data.polls)) {
     if (p.closed) continue;
     const ms = Number(p.endsAt) - Date.now();
     if (ms <= 0) await closePoll(p.id);
     else setTimeout(() => closePoll(p.id), ms);
   }
+}
+
+async function applyStaffVisibility(guild, roleId) {
+  const appId = client.user.id;
+  const [globalCommands, guildCommands] = await Promise.all([
+    client.rest.get(`/applications/${appId}/commands`),
+    client.rest.get(`/applications/${appId}/guilds/${guild.id}/commands`),
+  ]);
+  const allowed = [{ id: roleId, type: 1, permission: true }];
+  if (process.env.BOT_OWNER_IDS) {
+    for (const id of process.env.BOT_OWNER_IDS.split(',').map((x) => x.trim()).filter(Boolean)) {
+      if (!allowed.some((p) => p.id === id)) allowed.push({ id, type: 2, permission: true });
+    }
+  }
+  if (guild.ownerId && !allowed.some((p) => p.id === guild.ownerId)) {
+    allowed.push({ id: guild.ownerId, type: 2, permission: true });
+  }
+
+  const seen = new Set();
+  const permissions = [];
+  for (const cmd of [...globalCommands, ...guildCommands]) {
+    if (!cmd.default_member_permissions || cmd.default_member_permissions === '0') continue;
+    if (seen.has(cmd.id)) continue;
+    seen.add(cmd.id);
+    permissions.push({ id: cmd.id, permissions: allowed });
+  }
+  await client.rest.put(Routes.guildApplicationCommandsPermissions(appId, guild.id), {
+    body: permissions,
+  });
+  return permissions.length;
 }
 
 client.once(Events.ClientReady, async () => {
@@ -442,6 +574,12 @@ client.once(Events.ClientReady, async () => {
     console.error('[deploy]', err.rawError?.message || err.message);
   }
   await restore();
+
+  for (const [guildId, cfg] of Object.entries(load().settings)) {
+    if (!cfg.staffRoleId) continue;
+    const guild = client.guilds.cache.get(guildId);
+    if (guild) await applyStaffVisibility(guild, cfg.staffRoleId).catch(() => {});
+  }
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -469,14 +607,33 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === 'suggestion-setup') {
+      const current = setting(interaction.guild.id) || {};
       if (interaction.options.getBoolean('clear')) {
-        setSetting(interaction.guild.id, { channelId: null });
+        setSetting(interaction.guild.id, { channelId: null, autoMinutes: 0 });
         return reply(interaction, { content: '✅ ערוץ ההצעות בוטל.' });
       }
       const channel = interaction.options.getChannel('channel') || interaction.channel;
       if (!channel?.isTextBased()) return reply(interaction, { content: '⚠️ צריך ערוץ טקסט.' });
-      setSetting(interaction.guild.id, { channelId: channel.id });
-      return reply(interaction, { content: `✅ ערוץ ההצעות נקבע ל־<#${channel.id}>.` });
+      const autoValue = interaction.options.getString('auto');
+      const autoMinutes =
+        autoValue === null || autoValue === undefined
+          ? Number(current.autoMinutes) || 0
+          : TIME_MINUTES[autoValue] || 0;
+      setSetting(interaction.guild.id, { channelId: channel.id, autoMinutes });
+      return reply(interaction, {
+        content: autoMinutes
+          ? `✅ ערוץ ההצעות: <#${channel.id}>. הכרעה אוטומטית אחרי ${autoMinutes} דקות.`
+          : `✅ ערוץ ההצעות נקבע ל־<#${channel.id}>.`,
+      });
+    }
+
+    if (interaction.commandName === 'staff-hide') {
+      const role = interaction.options.getRole('role', true);
+      setSetting(interaction.guild.id, { staffRoleId: role.id });
+      const count = await applyStaffVisibility(interaction.guild, role.id);
+      return reply(interaction, {
+        content: `${config.hiddenDone.replace('{role}', role.id)}\nהוסתרו ${count} פקודות צוות.`,
+      });
     }
 
     if (interaction.commandName === 'suggest') return await createSuggestion(interaction);

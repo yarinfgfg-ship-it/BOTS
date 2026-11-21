@@ -11,7 +11,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
 - 🎁 **Giveaways** — `/giveaway` with entry button, timer, auto winners, reroll, restart-safe storage, and a generated 16:9 winner card with the winner's avatar + text baked in
-- 💡 **Suggestions & Polls** — `/suggest` with staff approve/deny buttons, plus `/poll` with 2–4 options, live counts, timer, and auto results
+- 💡 **Suggestions & Polls** — richer suggestion/poll cards, a time picker, auto-decide for suggestions, and `/staff-hide` to hide staff commands from regular members
 - 📦 **Sellable products** — 7 standalone bots in `bots/`
 
 ## 🚀 Run locally

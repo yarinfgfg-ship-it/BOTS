@@ -10,7 +10,7 @@
 | `owner-tools/` | כלי יוצר | `/dm`, `/alert`, `/join-server` |
 | `automod/` | חסימת קישורים ו־NSFW | `/automod-setup`, `/automod-status` + כללי AutoMod אוטומטיים |
 | `giveaways/` | הגרלות | `/giveaway start/end/reroll/list` + כפתור כניסה והגרלה אוטומטית |
-| `suggestions/` | הצעות והצבעות | `/suggest`, `/suggestion-setup`, `/poll create/close/results` |
+| `suggestions/` | הצעות והצבעות | `/suggest`, `/suggestion-setup`, `/poll create/close/results`, `/staff-hide` |
 
 הבוט הראשי שלך (`שומר הקהילה`) נשאר בקובץ `index.js` שבשורש הפרויקט וממשיך להריץ הכל יחד.
 

@@ -2,6 +2,16 @@ require('dotenv').config();
 
 const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
 
+const TIME_CHOICES = [
+  { name: '5 דקות', value: '5' },
+  { name: '15 דקות', value: '15' },
+  { name: '30 דקות', value: '30' },
+  { name: 'שעה', value: '60' },
+  { name: '3 שעות', value: '180' },
+  { name: '24 שעות', value: '1440' },
+  { name: '7 ימים', value: '10080' },
+];
+
 const commands = [
   new SlashCommandBuilder()
     .setName('verify-setup')
@@ -320,6 +330,12 @@ const commands = [
     .setDescription('הגדרת ערוץ ההצעות')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addChannelOption((o) => o.setName('channel').setDescription('הערוץ שבו יופיעו ההצעות'))
+    .addStringOption((o) =>
+      o
+        .setName('auto')
+        .setDescription('זמן עד להכרעה אוטומטית לפי רוב הקולות')
+        .addChoices({ name: 'ללא — רק צוות מחליט', value: '0' }, ...TIME_CHOICES)
+    )
     .addBooleanOption((o) => o.setName('clear').setDescription('ביטול הערוץ המוגדר'))
     .toJSON(),
   new SlashCommandBuilder()
@@ -341,18 +357,18 @@ const commands = [
           o.setName('question').setDescription('השאלה').setRequired(true).setMaxLength(200)
         )
         .addStringOption((o) =>
+          o
+            .setName('duration')
+            .setDescription('משך ההצבעה — בוחרים מתפריט')
+            .setRequired(true)
+            .addChoices(...TIME_CHOICES)
+        )
+        .addStringOption((o) =>
           o.setName('option1').setDescription('אפשרות 1').setRequired(true).setMaxLength(100)
         )
         .addStringOption((o) => o.setName('option2').setDescription('אפשרות 2').setMaxLength(100))
         .addStringOption((o) => o.setName('option3').setDescription('אפשרות 3').setMaxLength(100))
         .addStringOption((o) => o.setName('option4').setDescription('אפשרות 4').setMaxLength(100))
-        .addIntegerOption((o) =>
-          o
-            .setName('duration')
-            .setDescription('משך ההצבעה בדקות (ברירת מחדל 10)')
-            .setMinValue(1)
-            .setMaxValue(10080)
-        )
     )
     .addSubcommand((s) =>
       s
@@ -365,6 +381,14 @@ const commands = [
         .setName('results')
         .setDescription('תוצאות ההצבעה')
         .addStringOption((o) => o.setName('id').setDescription('מזהה הודעת ההצבעה').setRequired(true))
+    )
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('staff-hide')
+    .setDescription('הסתרת פקודות צוות ממשתמשים רגילים')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addRoleOption((o) =>
+      o.setName('role').setDescription('תפקיד הצוות שיראה את הפקודות').setRequired(true)
     )
     .toJSON(),
   new SlashCommandBuilder()
