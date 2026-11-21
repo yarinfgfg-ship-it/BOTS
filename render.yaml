@@ -1,14 +1,12 @@
 services:
   - type: web
-    name: shomer-hakkahila
+    name: bots-xinzon
     runtime: docker
     plan: free
     healthCheckPath: /health
     envVars:
       - key: DATA_DIR
         value: /app/data
-      - key: OAUTH_PORT
-        value: 3000
       - key: ENABLE_MEMBERS_INTENT
         value: "true"
       - key: AUTO_DEPLOY_COMMANDS

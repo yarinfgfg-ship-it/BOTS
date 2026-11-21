@@ -28,7 +28,8 @@ function recordVerification(userId, guildId, ip) {
 const CLIENT_ID = process.env.CLIENT_ID || '';
 const CLIENT_SECRET = process.env.CLIENT_SECRET || '';
 const REDIRECT_URI = process.env.REDIRECT_URI || 'http://localhost:3000/callback';
-const PORT = Number(process.env.OAUTH_PORT || 3000);
+// Render injects PORT and routes traffic there; locally we fall back to 3000.
+const PORT = Number(process.env.PORT || process.env.OAUTH_PORT || 3000);
 
 // Everything only works once the secret + redirect URI are configured.
 function enabled() {
