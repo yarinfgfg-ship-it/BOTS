@@ -59,15 +59,22 @@
 
 ---
 
-## שלב 4 — UptimeRobot (שומר מהשינה)
+## שלב 4 — UptimeRobot (שומר מהשינה) — חובה!
 
-1. צרו חשבון חינמי ב־https://uptimerobot.com
-2. **Add New Monitor**:
+> ⚠️ זה השלב ש**חייבים** לעשות ידנית. ניסינו להשתמש ב־GitHub Actions כפינגר אוטומטי (`/keep-alive.yml`), אבל ה־scheduler של GitHub לא הפעיל אותו כלל (0 runs). **אל תסמכו עליו** — רק מוניטור חיצוני באמת שומר על הבוט ער.
+
+1. צרו חשבון חינמי ב־https://uptimerobot.com (בלי כרטיס אשראי).
+2. התחברו → **Add New Monitor**:
    - Monitor Type: **HTTP(s)**
    - Friendly Name: `Shomer Havoda`
    - URL: `https://bots-xinz.onrender.com/health`
    - Monitoring Interval: **5 minutes** (מותר בחינם)
-3. שמרו. מעכשיו הבוט יישאר ער.
+3. לחצו **Create Monitor**.
+4. תוך כמה דקות המוניטור צריך להיות ירוק (Up). מעכשיו הבוט יישאר ער גם כשה־PC שלכם כבוי.
+
+**חלופה:** https://cron-job.org — חשבון חינמי, מוסיפים Job שפונה לאותה כתובת כל 5 דקות.
+
+**בדיקה:** after 20+ דקות בלי שימוש, פתחו `https://bots-xinz.onrender.com/health`. אם הזמן התגובה הוא מתחת לשנייה — הפינגר עובד. אם לוקח 15–60 שניות — הוא לא עובד.
 
 ---
 
