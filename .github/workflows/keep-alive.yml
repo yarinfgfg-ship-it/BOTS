@@ -3,7 +3,8 @@ name: Keep Render bot awake
 on:
   schedule:
     # GitHub's minimum is 5 minutes. Render sleeps after ~15 minutes idle.
-    - cron: '*/5 * * * *'
+    # Off-grid minutes avoid the crowded :00/:05/:10... schedule queue.
+    - cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *'
   workflow_dispatch:
 
 jobs:
