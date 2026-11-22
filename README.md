@@ -32,7 +32,9 @@ For AI scanning of explicit images/GIFs with no text, also enable Discord’s bu
 
 ## ☁️ Run 24/7 for free (no credit card)
 
-Full guide: **[DEPLOY-FREE.md](DEPLOY-FREE.md)**
+**Recommended: always-on host (no sleeping, no pinger needed)** — **[DEPLOY-ALWAYS-ON.md](DEPLOY-ALWAYS-ON.md)**
+
+Render Free is also possible but it sleeps after 15 minutes idle, so it needs an external monitor — **[DEPLOY-FREE.md](DEPLOY-FREE.md)**. GitHub Actions schedules are not reliable for this and should not be used as the pinger.
 
 Short version:
 1. Push this repo to GitHub (already done here).
@@ -48,8 +50,10 @@ index.js              main combined bot
 config.js             all texts (edit without touching code)
 src/deploy-commands.js slash command registration
 src/store.js          persistent JSON storage (DATA_DIR)
+src/seedEnv.js        creates data dir + seeds JSON from env on any host
 bots/                 4 standalone sellable bots
-DEPLOY-FREE.md        free hosting guide
+DEPLOY-ALWAYS-ON.md   recommended free 24/7 hosting guide
+DEPLOY-FREE.md        Render free hosting guide (needs a pinger)
 Dockerfile            cloud deployment
 render.yaml           Render free service config
 ```

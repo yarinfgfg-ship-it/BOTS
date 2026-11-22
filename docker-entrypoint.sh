@@ -17,5 +17,7 @@ done
 [ -z "$OAUTH_JSON" ] || printf '%s' "$OAUTH_JSON" > /app/data/oauth.json
 [ -z "$GIVEAWAYS_JSON" ] || printf '%s' "$GIVEAWAYS_JSON" > /app/data/giveaways.json
 [ -z "$SUGGESTIONS_JSON" ] || printf '%s' "$SUGGESTIONS_JSON" > /app/data/suggestions.json
+[ -z "$LEVELS_JSON" ] || printf '%s' "$LEVELS_JSON" > /app/data/levels.json
+[ -z "$VERIFICATIONS_JSON" ] || printf '%s' "$VERIFICATIONS_JSON" > /app/data/verifications.json
 
 exec node index.js

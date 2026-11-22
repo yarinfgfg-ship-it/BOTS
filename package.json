@@ -7,7 +7,7 @@
   "scripts": {
     "deploy": "node src/deploy-commands.js",
     "invite": "node src/invite.js",
-    "start": "node index.js"
+    "start": "node -r ./src/seedEnv.js index.js"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.2.0",
