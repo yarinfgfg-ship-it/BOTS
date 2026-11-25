@@ -131,7 +131,7 @@ function start(onAuthorized) {
     // Build marker — lets us confirm which version the host is running.
     if (url.pathname === '/version') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('visual-v29-2026-11-25');
+      return res.end('visual-v30-2026-11-25');
     }
 
     if (url.pathname !== '/callback') {
@@ -204,6 +204,17 @@ function start(onAuthorized) {
   server.listen(PORT, () => {
     console.log(`[oauth] Callback server ready at ${REDIRECT_URI}`);
   });
+  // Render free web services sleep after ~15 minutes without inbound traffic.
+  // While the process is alive, ping our own health endpoint every 4 minutes
+  // so it stays warm. GitHub Actions still wakes it if it ever does sleep.
+  if (process.env.RENDER === 'true' || process.env.SELF_PING_URL) {
+    const url = process.env.SELF_PING_URL || 'https://bots-xinz.onrender.com/health';
+    const timer = setInterval(() => {
+      fetch(`${url}${url.includes('?') ? '&' : '?'}cb=${Date.now()}`).catch(() => {});
+    }, 4 * 60 * 1000);
+    timer.unref();
+    console.log('[keep-alive] self-ping enabled');
+  }
   server.on('error', (err) => console.error('[oauth] server:', err.message));
   return server;
 }
