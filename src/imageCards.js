@@ -15,6 +15,17 @@ function ltr(text) {
   return `\u2068${String(text ?? '')}\u2069`;
 }
 
+function rtl(text) {
+  return `\u2067${String(text ?? '')}\u2069`;
+}
+
+// Isolate mixed text with the right base direction. Hebrew server names must
+// not be wrapped in an LTR isolate — that renders them backwards.
+function auto(text) {
+  const s = String(text ?? '');
+  return /[\u0590-\u05FF]/.test(s) ? rtl(s) : ltr(s);
+}
+
 function shorten(text, max) {
   const clean = String(text || '').replace(/\s+/g, ' ').trim();
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
@@ -172,7 +183,7 @@ async function buildWelcomeCard({
   ctx.fillText(shorten(text('greeting', 'ברוך הבא!'), 28), textX, 58);
   ctx.font = `18px ${FONT}`;
   ctx.fillStyle = '#ABACB2';
-  ctx.fillText(ltr(shorten(guildName || 'השרת', 34)), textX, 92);
+  ctx.fillText(auto(shorten(guildName || 'השרת', 34)), textX, 92);
 
   // Server icon (falls back to the first letter on a Discord-pink tile).
   const iconSize = 96;
@@ -192,7 +203,7 @@ async function buildWelcomeCard({
     ctx.font = `bold 44px ${FONT}`;
     ctx.fillStyle = '#ffffff';
     ctx.fillText(
-      ltr(String(guildName || 'S').trim().charAt(0).toUpperCase()),
+      auto(String(guildName || 'S').trim().charAt(0).toUpperCase()),
       iconX + iconSize / 2,
       iconY + iconSize / 2 + 2
     );
@@ -258,11 +269,11 @@ async function buildWelcomeCard({
   rounded(ctx, photoX, photoY, photoW, photoH, 6);
   ctx.stroke();
 
-  ctx.direction = 'ltr';
+  ctx.direction = 'rtl';
   ctx.textAlign = 'left';
   ctx.font = `16px ${FONT}`;
   ctx.fillStyle = '#ABACB2';
-  ctx.fillText(shorten(text('footer', guildName || 'השרת'), 70), left, 580);
+  ctx.fillText(auto(shorten(text('footer', guildName || 'השרת'), 70)), left, 580);
 
   return canvas.toBuffer('image/png');
 }

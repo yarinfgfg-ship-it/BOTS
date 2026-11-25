@@ -152,10 +152,12 @@ function welcomeCardOptions(guildId) {
   };
 }
 
-async function buildGuildWelcomeCard(guildId, user, memberCount, guild) {
+async function buildGuildWelcomeCard(guildId, user, memberCount, guild, displayName) {
   const opts = welcomeCardOptions(guildId);
+  const shownName = displayName || user.globalName || user.username;
   const vars = {
-    user: `<@${user.id}>`,
+    // Canvas cannot render a Discord ping; show a readable @name instead.
+    user: `@${shownName}`,
     guild: guild?.name || '',
     count: memberCount,
     date: welcomeStamp(),
@@ -166,7 +168,7 @@ async function buildGuildWelcomeCard(guildId, user, memberCount, guild) {
   }
   return buildWelcomeCard({
     avatarUrl: user.displayAvatarURL({ size: 512, extension: 'png' }),
-    name: user.globalName || user.username,
+    name: shownName,
     guildName: guild?.name || '',
     memberCount,
     guildIconUrl: guild?.iconURL?.({ size: 256, extension: 'png' }),
@@ -213,10 +215,35 @@ function brandEmbed(embed) {
   return embed;
 }
 
-// All welcome text now lives inside the generated card. The embed is only a
-// clean frame for the image — no duplicated text and no unwanted @mention ping.
-function buildWelcomeEmbed() {
-  return new EmbedBuilder().setColor(config.colors.welcome);
+// The same editable text is shown as real Discord text AND baked into the image.
+// {user} becomes a plain @name here — never a real ping (no red mention).
+function welcomeLines(guildId, user, memberCount, guild, displayName) {
+  const saved = guildConfig.get(guildId).welcomeCard || {};
+  const text = { ...config.welcomeCard, ...(saved.text || {}) };
+  const shownName = displayName || user.globalName || user.username;
+  const vars = {
+    user: `@${shownName}`,
+    guild: guild?.name || '',
+    count: memberCount,
+    date: welcomeStamp(),
+  };
+  return ['greeting', 'hello', 'line1', 'line2', 'footer']
+    .map((key) => fill(text[key] ?? config.welcomeCard[key], vars).trim())
+    .filter(Boolean);
+}
+
+function buildWelcomeEmbed(options) {
+  const lines = welcomeLines(
+    options.guildId,
+    options.user,
+    options.memberCount,
+    options.guild,
+    options.displayName
+  );
+  const [first, ...rest] = lines;
+  return new EmbedBuilder()
+    .setColor(config.colors.welcome)
+    .setDescription([`**${first}**`, ...rest].join('\n'));
 }
 
 // Turns plain text into a normal Discord message — like a person typed it.
@@ -2371,11 +2398,18 @@ client.on(Events.GuildMemberAdd, async (member) => {
       gid,
       member.user,
       member.guild.memberCount,
-      member.guild
+      member.guild,
+      member.displayName
     );
     await channel.send({
       embeds: [
-        buildWelcomeEmbed(member.user, member.guild).setImage('attachment://welcome.png'),
+        buildWelcomeEmbed({
+          guildId: gid,
+          user: member.user,
+          memberCount: member.guild.memberCount,
+          guild: member.guild,
+          displayName: member.displayName,
+        }).setImage('attachment://welcome.png'),
       ],
       files: [new AttachmentBuilder(card, { name: 'welcome.png' })],
     });
@@ -2600,9 +2634,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
             gid,
             interaction.user,
             interaction.guild.memberCount,
-            interaction.guild
+            interaction.guild,
+            interaction.member?.displayName
           );
           return interaction.reply({
+            embeds: [
+              buildWelcomeEmbed({
+                guildId: gid,
+                user: interaction.user,
+                memberCount: interaction.guild.memberCount,
+                guild: interaction.guild,
+                displayName: interaction.member?.displayName,
+              }),
+            ],
             files: [new AttachmentBuilder(card, { name: 'welcome-preview.png' })],
             ephemeral: true,
           });
@@ -2626,16 +2670,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
             user = (await client.users.fetch(userId).catch(() => null)) || interaction.user;
           }
 
+          const guildMember = await interaction.guild.members.fetch(user.id).catch(() => null);
           const card = await buildGuildWelcomeCard(
             interaction.guild.id,
             user,
             interaction.guild.memberCount,
-            interaction.guild
+            interaction.guild,
+            guildMember?.displayName || user.globalName || user.username
           );
 
           return interaction.reply({
             embeds: [
-              buildWelcomeEmbed(user, interaction.guild).setImage('attachment://welcome.png'),
+              buildWelcomeEmbed({
+                guildId: interaction.guild.id,
+                user,
+                memberCount: interaction.guild.memberCount,
+                guild: interaction.guild,
+                displayName: guildMember?.displayName || user.globalName || user.username,
+              }).setImage('attachment://welcome.png'),
             ],
             files: [new AttachmentBuilder(card, { name: 'welcome.png' })],
             ephemeral: false,
