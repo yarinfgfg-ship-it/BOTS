@@ -1,0 +1,21 @@
+name: Keep Render bot awake (backup)
+
+# Second free GitHub Actions cron at off-peak minutes. GitHub sometimes delays
+# scheduled jobs, so two independent workflows reduce the chance of a gap.
+on:
+  schedule:
+    - cron: '2,7,12,17,22,27,32,37,42,47,52,57 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping health and version
+        run: |
+          echo "Pinging $(date -u +%FT%TZ)"
+          curl -fsS --retry 2 --retry-delay 3 --max-time 90 https://bots-xinz.onrender.com/health || true
+          echo
+          curl -fsS --retry 2 --retry-delay 3 --max-time 90 https://bots-xinz.onrender.com/version || true
+          echo
