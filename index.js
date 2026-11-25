@@ -1106,9 +1106,12 @@ async function openRenameModal(interaction) {
 }
 
 function sanitizeTicketName(raw) {
+  // Hebrew (and other Unicode) letters are valid in Discord channel names —
+  // keep them so a typed name actually shows up in the channel.
   return String(raw || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]/g, '-')
+    .normalize('NFKC')
+    .replace(/\s+/g, '-')
+    .replace(/[^\p{L}\p{N}_-]/gu, '')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40) || 'ticket';
