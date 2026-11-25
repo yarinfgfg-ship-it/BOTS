@@ -6,6 +6,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 
 - 🎫 **Tickets** — panel **category dropdown** (pick a type → ticket opens instantly), private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
 - 🔐 **Ticket admins** — `/ticket-admin list/close/rename` to manage any ticket from anywhere, plus `/ticket-admin-role` to configure which roles can do it
+- 👀 **Ticket-only staff** — `/staff-roles` (private owner ID only) adds roles that can see and claim tickets without access to any bot command
 - ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
 - 👋 **Welcome** — simple Discord embed with normal text, exactly one real @ping, and one big image: the member's photo, or the one you set with `/welcome-card banner`. `/welcome-card preview` shows the exact result
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
@@ -72,6 +73,7 @@ render.yaml           Render free service config
 | `/ticket-admin close ticket:#channel` | Close any ticket from outside its channel |
 | `/ticket-admin rename ticket:#channel name:...` | Rename any ticket channel |
 | `/ticket-admin-role add/remove/list role:@role` | Configure admin roles that can use `/ticket-admin` |
+| `/staff-roles add/remove/list role:@role` | Owner-only (ID `1090650042030899262`): roles that can see and take tickets but cannot use any bot command |
 | `/verify-setup` | Post the verify panel |
 | `/verify-role role:@role` | Choose the verified role |
 | `/verify-minage days:7` | Minimum account age to verify (0 = off) |

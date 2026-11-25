@@ -331,6 +331,23 @@ const commands = [
     )
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('staff-roles')
+    .setDescription('רולי צוות שרואים טיקטים — בלי פקודות בוט (בעלים בלבד)')
+    .addSubcommand((s) =>
+      s
+        .setName('add')
+        .setDescription('הוספת רול צוות')
+        .addRoleOption((o) => o.setName('role').setDescription('הרול להוספה').setRequired(true))
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('remove')
+        .setDescription('הסרת רול צוות')
+        .addRoleOption((o) => o.setName('role').setDescription('הרול להסרה').setRequired(true))
+    )
+    .addSubcommand((s) => s.setName('list').setDescription('רשימת רולי הצוות'))
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('ticket-roles')
     .setDescription('ניהול רולים שיכולים לראות ולטפל בטיקטים')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
