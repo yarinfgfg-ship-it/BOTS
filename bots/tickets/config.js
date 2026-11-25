@@ -35,6 +35,7 @@ module.exports = {
   created: '✅ נפתח טיקט חדש: {channel}',
   duplicate: '⚠️ כבר קיים לך טיקט פתוח: {channel}',
   claimedReply: '✅ הטיקט נתפס ע"י <@{staff}>.',
+  claimedChannelMessage: 'הטיקט נלקח על ידי {staff}',
   closed: '✅ הטיקט נסגר.',
   setupDone: '✅ פאנל הטיקטים הוקם בערוץ הזה.',
   needPerm: '⚠️ נדרשת הרשאת **ניהול ערוצים**.',

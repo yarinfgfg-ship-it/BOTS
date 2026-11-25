@@ -430,6 +430,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
           .setDescription(fill(config.claimedDescription, { staff: `<@${interaction.user.id}>` }));
         await msg.edit({ embeds: [embed] }).catch(() => {});
       }
+      await interaction.channel
+        .send({
+          content: fill(config.claimedChannelMessage, { staff: `<@${interaction.user.id}>` }),
+          allowedMentions: { parse: ['users'] },
+        })
+        .catch(() => {});
       return interaction.editReply({ content: fill(config.claimedReply, { staff: interaction.user.id }) });
     }
 

@@ -1064,6 +1064,14 @@ async function claimTicket(interaction) {
     components: [ticketButtons({ claimed: true })],
   });
 
+  // Tell everyone in the ticket channel who took it.
+  await channel
+    .send({
+      content: fill(config.claimed.channelMessage, { staff: `<@${interaction.user.id}>` }),
+      allowedMentions: { parse: ['users'] },
+    })
+    .catch((err) => console.error('[ticket claim message]', err.message));
+
   await reply(interaction, {
     content: fill(config.claimed.reply, { number }),
   });

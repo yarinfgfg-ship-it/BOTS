@@ -407,6 +407,7 @@ module.exports = {
     ].join('\n'),
     footerText: '',
     reply: 'תפסתם את הטיקט #{number}.',
+    channelMessage: 'הטיקט נלקח על ידי {staff}',
     alreadyClaimed: 'הטיקט כבר נתפס על ידי {staff}.',
     notStaff: 'רק חברי צוות יכולים לתפוס טיקטים.',
   },
