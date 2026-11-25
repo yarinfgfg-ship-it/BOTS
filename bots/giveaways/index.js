@@ -93,19 +93,33 @@ const commands = [
     .toJSON(),
 ];
 
+function brand(embed) {
+  if (client.user?.displayAvatarURL) {
+    embed.setThumbnail(client.user.displayAvatarURL({ size: 128 }));
+  }
+  return embed;
+}
+
 function embedFor(g) {
   const count = (g.entrants || []).length;
   const roleLine = g.roleId ? `\n🎭 דרישה: <@&${g.roleId}>` : '';
-  return new EmbedBuilder()
+  const winnerCount = Array.isArray(g.winners) ? g.winners.length : Number(g.winners) || 1;
+  const winnersText = Array.isArray(g.winners) && g.winners.length
+    ? g.winners.map((id) => `<@${id}>`).join(', ')
+    : String(winnerCount);
+
+  const embed = new EmbedBuilder()
     .setColor(config.color)
     .setTitle(g.ended ? `🎉 ${g.prize} — הסתיים` : `🎉 ${g.prize}`)
     .setDescription(
       g.ended
-        ? `👥 משתתפים: **${count}**\n🏆 זוכים: **${g.winners}**`
-        : `לחצו על הכפתור כדי להיכנס!\n\n👥 משתתפים: **${count}**\n🏆 זוכים: **${g.winners}**\n⏰ מסתיים: <t:${Math.floor(g.endsAt / 1000)}:R>${roleLine}`
+        ? `👥 משתתפים: **${count}**\n🏆 זוכים: **${winnersText}**`
+        : `לחצו על הכפתור כדי להיכנס!\n\n👥 משתתפים: **${count}**\n🏆 זוכים: **${winnerCount}**\n⏰ מסתיים: <t:${Math.floor(g.endsAt / 1000)}:R>${roleLine}`
     )
-    .setFooter({ text: `מארח: ${g.hostTag || 'יוצר השרת'}` })
+    .setFooter({ text: `מארח: ${g.hostTag || 'יוצר השרת'} · ${config.footer}` })
     .setTimestamp();
+
+  return brand(embed);
 }
 
 function componentsFor(g) {

@@ -53,6 +53,29 @@ const commands = [
     .addRoleOption((o) => o.setName('role').setDescription('התפקיד לחברים חדשים'))
     .addBooleanOption((o) => o.setName('clear').setDescription('ביטול התפקיד'))
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('verify-image')
+    .setDescription('תמונה בפאנל האימות ובהודעת האימות')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) =>
+      s
+        .setName('set')
+        .setDescription('העלאת קובץ תמונה')
+        .addAttachmentOption((o) =>
+          o.setName('image').setDescription('קובץ התמונה').setRequired(true)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('url')
+        .setDescription('שימוש בקישור תמונה')
+        .addStringOption((o) =>
+          o.setName('link').setDescription('קישור http(s)').setRequired(true)
+        )
+    )
+    .addSubcommand((s) => s.setName('remove').setDescription('הסרת התמונה'))
+    .addSubcommand((s) => s.setName('preview').setDescription('הצגת התמונה הנוכחית'))
+    .toJSON(),
 ];
 
 function fill(text, vars) {
@@ -61,11 +84,19 @@ function fill(text, vars) {
   return out;
 }
 
-function panel() {
+function brand(embed) {
+  if (client.user?.displayAvatarURL) {
+    embed.setThumbnail(client.user.displayAvatarURL({ size: 128 }));
+  }
+  return embed.setFooter({ text: config.footer });
+}
+
+function panel(guildId) {
   const embed = new EmbedBuilder()
     .setColor(config.colors.panel)
     .setTitle(config.title)
     .setDescription(config.description);
+  if (cfg(guildId).verifyImageUrl) embed.setImage(cfg(guildId).verifyImageUrl);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('verify_button')
@@ -73,7 +104,45 @@ function panel() {
       .setEmoji(config.buttonEmoji)
       .setStyle(ButtonStyle.Success)
   );
-  return { embeds: [embed], components: [row] };
+  return { embeds: [brand(embed)], components: [row] };
+}
+
+function verifyPayload(guildId, content) {
+  const payload = { content };
+  const url = cfg(guildId).verifyImageUrl;
+  if (url) {
+    payload.embeds = [
+      new EmbedBuilder()
+        .setColor(config.colors.panel)
+        .setTitle(config.imageTitle)
+        .setImage(url),
+    ];
+  }
+  return payload;
+}
+
+async function refreshVerifyPanels(guild) {
+  let updated = 0;
+  for (const channel of guild.channels.cache.values()) {
+    if (!channel.isTextBased() || channel.isDMBased()) continue;
+    const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+    if (!messages) continue;
+    for (const m of messages.values()) {
+      if (
+        m.author.id !== client.user.id ||
+        !m.components.some((row) => row.components.some((c) => c.customId === 'verify_button')) ||
+        !m.embeds[0]
+      ) {
+        continue;
+      }
+      const embed = EmbedBuilder.from(m.embeds[0]);
+      if (cfg(guild.id).verifyImageUrl) embed.setImage(cfg(guild.id).verifyImageUrl);
+      else embed.setImage(null);
+      await m.edit({ embeds: [embed] }).catch(() => {});
+      updated++;
+    }
+  }
+  return updated;
 }
 
 async function reply(interaction, content) {
@@ -120,7 +189,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const gid = interaction.guild.id;
 
       if (interaction.commandName === 'verify-setup') {
-        await interaction.channel.send(panel());
+        await interaction.channel.send(panel(gid));
         if (!cfg(gid).verifyRoleId) {
           const existing = interaction.guild.roles.cache.find((r) => r.name === config.roleName);
           const role = existing || (await interaction.guild.roles
@@ -164,6 +233,38 @@ client.on(Events.InteractionCreate, async (interaction) => {
         saveStore();
         return reply(interaction, fill(config.joinRoleSet, { role: role.id }));
       }
+
+      if (interaction.commandName === 'verify-image') {
+        const sub = interaction.options.getSubcommand();
+
+        if (sub === 'remove') {
+          delete cfg(gid).verifyImageUrl;
+          saveStore();
+          const updated = await refreshVerifyPanels(interaction.guild);
+          return reply(interaction, fill(config.imageRemoved, { updated }));
+        }
+
+        if (sub === 'preview') {
+          return reply(
+            interaction,
+            cfg(gid).verifyImageUrl
+              ? fill(config.imageCurrent, { url: cfg(gid).verifyImageUrl })
+              : config.imageNone
+          );
+        }
+
+        const url =
+          sub === 'url'
+            ? interaction.options.getString('link')
+            : interaction.options.getAttachment('image')?.url || null;
+        if (!url || !/^https?:\/\//i.test(url)) {
+          return reply(interaction, '⚠️ יש לספק תמונה או קישור תקין.');
+        }
+        cfg(gid).verifyImageUrl = url;
+        saveStore();
+        const updated = await refreshVerifyPanels(interaction.guild);
+        return reply(interaction, fill(config.imageSet, { updated }));
+      }
       return;
     }
 
@@ -175,7 +276,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const roleId = settings.verifyRoleId;
     if (!roleId) return interaction.editReply({ content: config.noRole }).catch(() => {});
     if (interaction.member.roles.cache.has(roleId)) {
-      return interaction.editReply({ content: config.already }).catch(() => {});
+      return interaction.editReply(verifyPayload(gid, config.already)).catch(() => {});
     }
     const role = interaction.guild.roles.cache.get(roleId) ||
       (await interaction.guild.roles.fetch(roleId).catch(() => null));
@@ -196,7 +297,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         console.error('[verify] remove join role:', err.message);
       }
     }
-    return interaction.editReply({ content: fill(config.success, { role: role.id, removed }) }).catch(() => {});
+    return interaction.editReply(
+      verifyPayload(gid, fill(config.success, { role: role.id, removed }))
+    ).catch(() => {});
   } catch (err) {
     console.error('[interaction]', err.message);
   }

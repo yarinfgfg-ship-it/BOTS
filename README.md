@@ -64,10 +64,12 @@ render.yaml           Render free service config
 | --- | --- |
 | `/ticket-setup` | Post the ticket panel |
 | `/ticket-autoclose minutes:60 warn:5` | Auto-close idle tickets (0 = off) |
+| `/ticket-category add/list/remove` | Manage ticket categories; remove by number, name or value |
 | `/verify-setup` | Post the verify panel |
 | `/verify-role role:@role` | Choose the verified role |
 | `/verify-minage days:7` | Minimum account age to verify (0 = off) |
 | `/verify-log channel:#channel` | Verify audit-log channel |
+| `/verify-image set/url/remove` | Picture on the verify panel and success message |
 | `/reverify user:@member` | Re-verify a member and refresh the profile |
 | `/join-role role:@role` | Role given on join, removed on verify |
 | `/welcome-setup` | Set welcome channel |

@@ -1,5 +1,6 @@
 module.exports = {
   colors: { panel: '#5865F2', open: '#57F287', claimed: '#FEE75C' },
+  footer: 'זרימה · מערכת הטיקטים',
   panelTitle: '🎫 מערכת התמיכה והעזרה',
   panelDescription: 'צריכים עזרה? לחצו על הכפתור למטה כדי לפתוח טיקט פרטי מול הצוות.',
   buttonLabel: 'פתיחת טיקט',
@@ -9,7 +10,7 @@ module.exports = {
   closeLabel: 'סגירת טיקט',
   closeEmoji: '🔒',
   ticketTitle: '🎫 טיקט #{number}',
-  ticketDescription: 'ברוכים הבאים {user}! הצוות יגיע בהקדם.\nכתבו כאן את הבעיה שלכם.',
+  ticketDescription: 'ברוכים הבאים {user}! פנייה מסוג **{category}**.\nהצוות יגיע בהקדם — כתבו כאן את הבעיה שלכם.',
   claimedTitle: '🙋 הטיקט נתפס',
   claimedDescription: 'הטיקט נתפס ע"י {staff}.',
   created: '✅ נפתח טיקט חדש: {channel}',

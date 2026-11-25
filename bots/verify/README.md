@@ -53,6 +53,8 @@ node index.js
 3. `/join-role role:@לא מאומת` — לבחירת התפקיד שיינתן בהצטרפות ויוסר אחרי האימות.
 4. `/join-role` בלי פרמטרים — מראה את התפקיד הנוכחי.
 5. `/join-role clear:true` — מבטל אותו.
+6. `/verify-image set:@קובץ` או `/verify-image url:כתובת` — תמונה שתופיע בפאנל ובהודעת האימות.
+7. `/verify-image remove` — הסרת התמונה. `/verify-image preview` — הצגתה.
 
 ---
 

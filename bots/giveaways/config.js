@@ -1,5 +1,6 @@
 module.exports = {
   color: '#FAA61A',
+  footer: '🎉 הגרלות הקהילה',
   button: '🎉 כניסה להגרלה',
   entered: '✅ נכנסת להגרלה! בהצלחה 🎉',
   already: '⚠️ כבר נכנסת להגרלה הזאת.',

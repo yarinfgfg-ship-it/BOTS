@@ -124,6 +124,14 @@ function makeEmbed({ title, description, color, footerText, showTimestamp, vars 
   return embed;
 }
 
+// Small visual touch used on the main panels/cards — consistent bot avatar.
+function brandEmbed(embed) {
+  if (client.user?.displayAvatarURL) {
+    embed.setThumbnail(client.user.displayAvatarURL({ size: 128 }));
+  }
+  return embed;
+}
+
 // Shared by the real join event and /test so the preview matches exactly.
 function buildWelcomeEmbed(user, guild) {
   return new EmbedBuilder()
@@ -257,7 +265,7 @@ function ticketMainEmbed(channel, guildCfg) {
   }
 
   if (guildCfg.imageUrl) embed.setImage(guildCfg.imageUrl);
-  return embed;
+  return brandEmbed(embed);
 }
 
 /**
@@ -335,6 +343,39 @@ async function refreshPanelEmbeds(guild, guildCfg) {
   return updated;
 }
 
+/**
+ * Add/remove the configured image on every verify panel of a guild.
+ */
+async function refreshVerifyEmbeds(guild, guildCfg) {
+  const channels = [...guild.channels.cache.values()].filter(
+    (ch) => ch.type === ChannelType.GuildText
+  );
+
+  let updated = 0;
+  for (const channel of channels) {
+    try {
+      const messages = await channel.messages.fetch({ limit: 50 }).catch(() => null);
+      if (!messages) continue;
+      const panels = messages.filter(
+        (m) =>
+          m.author.id === client.user.id &&
+          m.components.some((row) => row.components.some((c) => c.customId === 'verify_button'))
+      );
+      for (const panel of panels.values()) {
+        if (!panel.embeds[0]) continue;
+        const embed = EmbedBuilder.from(panel.embeds[0]);
+        if (guildCfg.verifyImageUrl) embed.setImage(guildCfg.verifyImageUrl);
+        else embed.setImage(null);
+        await panel.edit({ embeds: [embed] });
+        updated++;
+      }
+    } catch {
+      /* channel not readable */
+    }
+  }
+  return updated;
+}
+
 async function updatePanelText(interaction, gid) {
   const title = interaction.options.getString('title');
   const description = interaction.options.getString('description');
@@ -387,6 +428,9 @@ function verifyPanel(guildId) {
     vars: {},
   });
 
+  const imageUrl = configFor(guildId).verifyImageUrl;
+  if (imageUrl) embed.setImage(imageUrl);
+
   // One click: grant the verified role and remove the unverified role.
   // No OAuth / external site involved.
   const row = new ActionRowBuilder().addComponents(
@@ -397,7 +441,21 @@ function verifyPanel(guildId) {
       .setStyle(ButtonStyle.Success)
   );
 
-  return { embed, row };
+  return { embed: brandEmbed(embed), row };
+}
+
+function verifyReplyPayload(guildId, content) {
+  const payload = { content };
+  const imageUrl = configFor(guildId).verifyImageUrl;
+  if (imageUrl) {
+    payload.embeds = [
+      new EmbedBuilder()
+        .setColor(config.colors.panel)
+        .setTitle(config.verify.imageTitle)
+        .setImage(imageUrl),
+    ];
+  }
+  return payload;
 }
 
 async function logVerification(
@@ -1242,12 +1300,14 @@ function giveawayEmbed(g) {
     }
   }
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(g.cancelled ? config.colors.closed : config.giveaway.color)
     .setTitle(title)
     .setDescription(description)
-    .setFooter({ text: `מארח: ${g.hostTag || 'יוצר השרת'}` })
+    .setFooter({ text: `מארח: ${g.hostTag || 'יוצר השרת'} · ${config.brand.footer}` })
     .setTimestamp();
+
+  return brandEmbed(embed);
 }
 
 function giveawayComponents(g) {
@@ -2119,8 +2179,11 @@ client.once(Events.ClientReady, async (c) => {
       const cfg = configFor(guild.id);
       const tickets = await refreshTicketEmbeds(guild, cfg);
       const panels = await refreshPanelEmbeds(guild, cfg);
-      if (tickets || panels) {
-        console.log(`[sync] ${guild.id}: tickets=${tickets} panels=${panels}`);
+      const verifyPanels = await refreshVerifyEmbeds(guild, cfg);
+      if (tickets || panels || verifyPanels) {
+        console.log(
+          `[sync] ${guild.id}: tickets=${tickets} panels=${panels} verify=${verifyPanels}`
+        );
       }
       await syncAutoModRules(guild);
     } catch (err) {
@@ -2555,6 +2618,46 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
+        case 'verify-image': {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return reply(interaction, { content: '⚠️ נדרשת הרשאת ניהול שרת.' });
+          }
+
+          const gid = interaction.guild.id;
+          const sub = interaction.options.getSubcommand();
+
+          if (sub === 'remove') {
+            guildConfig.set(gid, { verifyImageUrl: null });
+            const updated = await refreshVerifyEmbeds(interaction.guild, configFor(gid));
+            return reply(interaction, {
+              content: fill(config.verify.imageRemoved, { updated }),
+            });
+          }
+
+          if (sub === 'preview') {
+            const url = configFor(gid).verifyImageUrl;
+            return reply(interaction, {
+              content: url
+                ? fill(config.verify.imageCurrent, { url })
+                : config.verify.imageNone,
+            });
+          }
+
+          const url =
+            sub === 'url'
+              ? interaction.options.getString('link')
+              : interaction.options.getAttachment('image')?.url || null;
+          if (!url || !/^https?:\/\//i.test(url)) {
+            return reply(interaction, { content: '⚠️ יש לספק תמונה או קישור תקין.' });
+          }
+
+          guildConfig.set(gid, { verifyImageUrl: url });
+          const updated = await refreshVerifyEmbeds(interaction.guild, configFor(gid));
+          return reply(interaction, {
+            content: fill(config.verify.imageSet, { updated }),
+          });
+        }
+
         case 'reverify': {
           if (
             !isOwnerUser(interaction) &&
@@ -2975,6 +3078,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             vars: dateVars(),
           });
           if (guildCfg.imageUrl) embed.setImage(guildCfg.imageUrl);
+          brandEmbed(embed);
 
           const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
@@ -3155,21 +3259,40 @@ client.on(Events.InteractionCreate, async (interaction) => {
             });
           }
 
+          const listText = categories.length
+            ? `**קטגוריות בתפריט (${categories.length}):**\n` +
+              categories
+                .map((c, i) => `${i + 1}. ${c.label} — \`${c.value}\``)
+                .join('\n') +
+              '\n\nאפשר להסיר לפי מספר, שם או ערך.'
+            : 'אין קטגוריות. הוסיפו עם `/ticket-category add`.';
+
           if (sub === 'remove') {
-            const value = interaction.options.getString('value');
-            const next = categories.filter((c) => c.value !== value);
+            const raw = (interaction.options.getString('value') || '').trim();
+            const byNumber = Number(raw) > 0 ? categories[Number(raw) - 1] : null;
+            const match =
+              byNumber ||
+              categories.find(
+                (c) =>
+                  c.value === raw || c.label.toLowerCase() === raw.toLowerCase()
+              );
+
+            if (!match) {
+              return reply(interaction, {
+                content: `⚠️ קטגוריה בשם \`${raw}\` לא נמצאה.\n\n${listText}`,
+              });
+            }
+
+            const next = categories.filter((c) => c.value !== match.value);
             guildConfig.set(gid, { categories: next });
             return reply(interaction, {
-              content: `✅ הקטגוריה \`${value}\` הוסרה. נותרו ${next.length}.`,
+              content:
+                `✅ הקטגוריה **${match.label}** (\`${match.value}\`) הוסרה מהתפריט. ` +
+                `נותרו ${next.length}.`,
             });
           }
 
-          return reply(interaction, {
-            content: categories.length
-              ? `**קטגוריות בשרת הזה (${categories.length}):**\n` +
-                categories.map((c) => `• ${c.label} — \`${c.value}\``).join('\n')
-              : 'אין קטגוריות. הוסיפו עם `/ticket-category add`.',
-          });
+          return reply(interaction, { content: listText });
         }
 
         case 'ticket-image': {
@@ -3371,9 +3494,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (interaction.member.roles.cache.has(roleId)) {
           // Already verified: refresh the saved profile, still one click.
           await saveProfile(interaction.guild.id, interaction.user).catch(() => {});
-          return interaction.editReply({
-            content: config.verify.alreadyRefreshed,
-          }).catch(() => {});
+          return interaction.editReply(
+            verifyReplyPayload(interaction.guild.id, config.verify.alreadyRefreshed)
+          ).catch(() => {});
         }
 
         const role =
@@ -3409,7 +3532,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         await logVerification(interaction.guild.id, interaction.user);
         const success = fill(config.verify.success, { role: role.id, unverifiedNote });
-        return interaction.editReply({ content: success }).catch(() => {});
+        return interaction.editReply(
+          verifyReplyPayload(interaction.guild.id, success)
+        ).catch(() => {});
       }
 
       case 'ticket_create': {
