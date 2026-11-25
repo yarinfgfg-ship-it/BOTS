@@ -84,6 +84,38 @@ function configFor(guildId) {
   });
 }
 
+/**
+ * Bring old saved panels up to the current long description and category list.
+ * Hosts re-seed GUILDS_JSON on every boot, so this is safe to re-apply.
+ */
+function migrateTicketDefaults() {
+  const all = guildConfig.load();
+  let changed = false;
+  for (const saved of Object.values(all)) {
+    if (
+      typeof saved.panelDescription === 'string' &&
+      /לחצו על הכפתור|מערכת התמיכה והעזרה/.test(saved.panelDescription)
+    ) {
+      saved.panelDescription = config.panel.description;
+      changed = true;
+    }
+    if (Array.isArray(saved.categories)) {
+      const labels = saved.categories.map((c) => c.label || '');
+      const stale =
+        labels.some((l) => /NFSW|NSFW|זונה|גיי/i.test(l)) ||
+        (labels.length <= 3 && labels.some((l) => /תמיכה|באג|שאלה/.test(l)));
+      if (stale) {
+        saved.categories = config.ticketCategories;
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    guildConfig.save(all);
+    console.log('[migrate] ticket panel text and categories updated to current defaults.');
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
@@ -3640,4 +3672,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
+migrateTicketDefaults();
 client.login(process.env.DISCORD_TOKEN);
