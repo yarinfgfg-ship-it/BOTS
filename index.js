@@ -34,7 +34,6 @@ const giveaways = require('./src/giveaways');
 const community = require('./src/community');
 const { buildWinnerCard } = require('./src/winnerCard');
 const {
-  buildWelcomeImage,
   buildProfileCard,
   buildLevelUpCard,
   buildLeaderboardCard,
@@ -194,15 +193,22 @@ function welcomeLines(guildId, user, memberCount, guild, displayName) {
     .filter(Boolean);
 }
 
-// Source for the big welcome image: the picture set with /welcome-card banner.
-// The small avatar cube is added by buildWelcomeImage before sending.
-function welcomeBannerSource(guildId) {
+// One image only: the picture chosen with /welcome-card banner, or the member's
+// photo when nothing was chosen. No generated image is used anywhere.
+function welcomeBanner(guildId) {
   const saved = guildConfig.get(guildId).welcomeCard || {};
   const file = saved.bannerFile ? path.basename(saved.bannerFile) : null;
   const target = file ? path.join(storePath('welcome-banners'), file) : null;
-  if (target && fs.existsSync(target)) return fs.readFileSync(target);
-  if (saved.bannerUrl) return saved.bannerUrl;
-  return null;
+  if (target && fs.existsSync(target)) {
+    const ext = path.extname(file) || '.png';
+    const name = `welcome-banner${ext}`;
+    return {
+      url: `attachment://${name}`,
+      files: [new AttachmentBuilder(fs.readFileSync(target), { name })],
+    };
+  }
+  if (saved.bannerUrl) return { url: saved.bannerUrl, files: [] };
+  return { url: null, files: [] };
 }
 
 function welcomeMessage(options) {
@@ -228,33 +234,16 @@ function welcomeMessage(options) {
   };
 }
 
-async function buildWelcomeEmbed(options, message) {
+function buildWelcomeEmbed(options, message) {
+  const banner = welcomeBanner(options.guildId);
   const avatar = options.user?.displayAvatarURL?.({ size: 512, extension: 'png' });
-  const botIcon = client.user?.displayAvatarURL?.({ size: 64, extension: 'png' });
-  const image = await buildWelcomeImage({
-    avatarUrl: avatar,
-    bannerSource: welcomeBannerSource(options.guildId),
-  });
-
-  // Discord crops author icons into circles, so the member's little square is
-  // drawn into the image itself (top left). No second avatar is added here.
-  const embed = new EmbedBuilder()
-    .setColor(config.colors.welcome)
-    .setAuthor({ name: options.guild?.name || config.brand?.footer || 'Welcome' })
-    .setFooter({
-      text: config.brand?.footer || 'שומר הקהילה',
-      ...(botIcon ? { iconURL: botIcon } : {}),
-    });
-
-  if (message.title) embed.setTitle(`🎉 ${message.title}`);
+  const embed = new EmbedBuilder().setColor(config.colors.welcome);
+  if (message.title) embed.setTitle(message.title);
   if (message.description) embed.setDescription(message.description);
-
-  const fileName = `welcome-${options.guildId}.png`;
-  embed.setImage(`attachment://${fileName}`);
-  return {
-    embed,
-    files: [new AttachmentBuilder(image, { name: fileName })],
-  };
+  const image = banner.url || avatar;
+  // Full-size image: the member's photo, or the banner you uploaded.
+  if (image) embed.setImage(image);
+  return { embed, files: banner.files };
 }
 
 // Turns plain text into a normal Discord message — like a person typed it.
@@ -2413,7 +2402,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
       displayName: member.displayName,
     };
     const message = welcomeMessage(welcomeOptions);
-    const { embed, files } = await buildWelcomeEmbed(welcomeOptions, message);
+    const { embed, files } = buildWelcomeEmbed(welcomeOptions, message);
     await channel.send({
       content: message.content,
       allowedMentions: { parse: ['users'] },
@@ -2654,13 +2643,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             guild: interaction.guild,
             displayName: interaction.member?.displayName,
           };
-          await interaction.deferReply({ ephemeral: true });
           const previewMessage = welcomeMessage(previewOptions);
-          const previewCard = await buildWelcomeEmbed(previewOptions, previewMessage);
-          return interaction.editReply({
+          const previewCard = buildWelcomeEmbed(previewOptions, previewMessage);
+          return interaction.reply({
             content: previewMessage.content,
             embeds: [previewCard.embed],
             files: previewCard.files,
+            ephemeral: true,
           });
         }
 
@@ -2690,14 +2679,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
             guild: interaction.guild,
             displayName: guildMember?.displayName || user.globalName || user.username,
           };
-          await interaction.deferReply({ ephemeral: false });
           const testMessage = welcomeMessage(testOptions);
-          const testCard = await buildWelcomeEmbed(testOptions, testMessage);
-          return interaction.editReply({
+          const testCard = buildWelcomeEmbed(testOptions, testMessage);
+          return interaction.reply({
             content: testMessage.content,
             allowedMentions: { parse: ['users'] },
             embeds: [testCard.embed],
             files: testCard.files,
+            ephemeral: false,
           });
         }
 
