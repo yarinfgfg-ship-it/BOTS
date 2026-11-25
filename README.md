@@ -7,13 +7,13 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 🎫 **Tickets** — panel **category dropdown** (pick a type → ticket opens instantly), private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
 - 🔐 **Ticket admins** — `/ticket-admin list/close/rename` to manage any ticket from anywhere, plus `/ticket-admin-role` to configure which roles can do it
 - ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
-- 👋 **Welcome** — polished Discord embed: small member photo at the top left, branded title/footer, bold server name and member number, one real @ping in the message, and one full-size image you set with `/welcome-card banner`. No generated image is used. `/welcome-card preview` shows the exact result
+- 👋 **Welcome** — polished Discord embed: a small rounded-square avatar (canvas, not AI) at the top left of the big image you set with `/welcome-card banner`, branded title/footer, bold server name and member number, and exactly one real @ping in the message. `/welcome-card preview` shows the exact result
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
 - 🎁 **Giveaways** — `/giveaway` with entry button, timer, multiple winners, winner DMs, cancel, reroll that excludes previous winners, restart-safe storage, and a generated 16:9 winner card with the winner's avatar + text baked in
 - 💡 **Suggestions & Polls** — richer suggestion/poll cards, a time picker, auto-decide for suggestions, and `/staff-hide` to hide staff commands from regular members
-- 🎨 **Canvas image cards** — generated welcome image, `/rank` profile card, level-up card, podium `/leaderboard`, plus matching branded **ticket and verify panel art** (Hebrew text baked in, avatars included)
+- 🎨 **Canvas image cards** — small welcome avatar cube, `/rank` profile card, level-up card, podium `/leaderboard`, plus matching branded **ticket and verify panel art** (Hebrew text baked in, avatars included)
 - 📈 **XP & coins** — earned from messages with a cooldown, saved in `levels.json`; powers the profile and leaderboard cards (no Message Content Intent needed)
 - 📦 **Sellable products** — 7 standalone bots in `bots/`
 
@@ -83,7 +83,7 @@ render.yaml           Render free service config
 | `/welcome-card text ...` | Edit greeting / hello / line1 / line2 / optional footer; supports `{user}`, `{guild}`, `{count}`, `{date}`; `clear: true` resets |
 | `/welcome-card banner upload image:...` | Upload the big banner image for this server |
 | `/welcome-card banner url link:...` | Use an image URL as the banner |
-| `/welcome-card banner remove` | Remove the banner (member photo is used again) |
+| `/welcome-card banner remove` | Remove the banner (only the small avatar cube is shown) |
 | `/welcome-card preview` | Preview the exact message privately |
 | `/test` | Preview the welcome embed |
 | `/beautify text:...` | Beautify text |

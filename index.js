@@ -34,6 +34,7 @@ const giveaways = require('./src/giveaways');
 const community = require('./src/community');
 const { buildWinnerCard } = require('./src/winnerCard');
 const {
+  buildWelcomeImage,
   buildProfileCard,
   buildLevelUpCard,
   buildLeaderboardCard,
@@ -193,22 +194,15 @@ function welcomeLines(guildId, user, memberCount, guild, displayName) {
     .filter(Boolean);
 }
 
-// One image only: the image chosen with /welcome-card banner, or the member's
-// photo when nothing was chosen. No generated card image is used anywhere.
-function welcomeBanner(guildId) {
+// Source for the big welcome image: the picture set with /welcome-card banner.
+// The small avatar cube is added by buildWelcomeImage before sending.
+function welcomeBannerSource(guildId) {
   const saved = guildConfig.get(guildId).welcomeCard || {};
   const file = saved.bannerFile ? path.basename(saved.bannerFile) : null;
   const target = file ? path.join(storePath('welcome-banners'), file) : null;
-  if (target && fs.existsSync(target)) {
-    const ext = path.extname(file) || '.png';
-    const name = `welcome-banner${ext}`;
-    return {
-      url: `attachment://${name}`,
-      files: [new AttachmentBuilder(fs.readFileSync(target), { name })],
-    };
-  }
-  if (saved.bannerUrl) return { url: saved.bannerUrl, files: [] };
-  return { url: null, files: [] };
+  if (target && fs.existsSync(target)) return fs.readFileSync(target);
+  if (saved.bannerUrl) return saved.bannerUrl;
+  return null;
 }
 
 function welcomeMessage(options) {
@@ -234,19 +228,19 @@ function welcomeMessage(options) {
   };
 }
 
-function buildWelcomeEmbed(options, message) {
-  const banner = welcomeBanner(options.guildId);
+async function buildWelcomeEmbed(options, message) {
   const avatar = options.user?.displayAvatarURL?.({ size: 512, extension: 'png' });
   const botIcon = client.user?.displayAvatarURL?.({ size: 64, extension: 'png' });
+  const image = await buildWelcomeImage({
+    avatarUrl: avatar,
+    bannerSource: welcomeBannerSource(options.guildId),
+  });
 
-  // Member photo appears small at the top left via the embed author icon.
-  // The image you set with /welcome-card banner is the only full-size image.
+  // Discord crops author icons into circles, so the member's little square is
+  // drawn into the image itself (top left). No second avatar is added here.
   const embed = new EmbedBuilder()
     .setColor(config.colors.welcome)
-    .setAuthor({
-      name: options.guild?.name || config.brand?.footer || 'Welcome',
-      iconURL: avatar,
-    })
+    .setAuthor({ name: options.guild?.name || config.brand?.footer || 'Welcome' })
     .setFooter({
       text: config.brand?.footer || 'שומר הקהילה',
       ...(botIcon ? { iconURL: botIcon } : {}),
@@ -254,9 +248,13 @@ function buildWelcomeEmbed(options, message) {
 
   if (message.title) embed.setTitle(`🎉 ${message.title}`);
   if (message.description) embed.setDescription(message.description);
-  if (banner.url) embed.setImage(banner.url);
 
-  return { embed, files: banner.files };
+  const fileName = `welcome-${options.guildId}.png`;
+  embed.setImage(`attachment://${fileName}`);
+  return {
+    embed,
+    files: [new AttachmentBuilder(image, { name: fileName })],
+  };
 }
 
 // Turns plain text into a normal Discord message — like a person typed it.
@@ -2415,7 +2413,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
       displayName: member.displayName,
     };
     const message = welcomeMessage(welcomeOptions);
-    const { embed, files } = buildWelcomeEmbed(welcomeOptions, message);
+    const { embed, files } = await buildWelcomeEmbed(welcomeOptions, message);
     await channel.send({
       content: message.content,
       allowedMentions: { parse: ['users'] },
@@ -2657,7 +2655,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             displayName: interaction.member?.displayName,
           };
           const previewMessage = welcomeMessage(previewOptions);
-          const previewCard = buildWelcomeEmbed(previewOptions, previewMessage);
+          const previewCard = await buildWelcomeEmbed(previewOptions, previewMessage);
           return interaction.reply({
             content: previewMessage.content,
             embeds: [previewCard.embed],
@@ -2693,7 +2691,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             displayName: guildMember?.displayName || user.globalName || user.username,
           };
           const testMessage = welcomeMessage(testOptions);
-          const testCard = buildWelcomeEmbed(testOptions, testMessage);
+          const testCard = await buildWelcomeEmbed(testOptions, testMessage);
           return interaction.reply({
             content: testMessage.content,
             allowedMentions: { parse: ['users'] },

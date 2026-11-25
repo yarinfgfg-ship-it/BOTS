@@ -590,8 +590,72 @@ async function buildVerifyPanelCard({ title, description }) {
   });
 }
 
+// A real rounded square ("cube") with the joining member's photo. Discord
+// always crops embed/author icons into circles, so the square is drawn with
+// canvas and placed directly into the welcome image instead.
+async function buildWelcomeAvatarCube(avatarUrl, size = 128) {
+  const canvas = createCanvas(size, size);
+  const ctx = canvas.getContext('2d');
+  const avatar = await loadSource(avatarUrl);
+  const radius = Math.round(size * 0.22);
+
+  ctx.save();
+  rounded(ctx, 0, 0, size, size, radius);
+  ctx.clip();
+  if (avatar) drawCover(ctx, avatar, 0, 0, size, size);
+  else {
+    ctx.fillStyle = '#2b2d38';
+    ctx.fillRect(0, 0, size, size);
+  }
+  ctx.restore();
+
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  rounded(ctx, 2, 2, size - 4, size - 4, Math.max(1, radius - 2));
+  ctx.stroke();
+  return canvas.toBuffer('image/png');
+}
+
+// Keeps the chosen banner big and puts the little avatar cube at its top left.
+// Canvas only: no AI, no external image service.
+async function buildWelcomeImage({ avatarUrl, bannerSource }) {
+  const cube = await loadImage(await buildWelcomeAvatarCube(avatarUrl, 128));
+  const banner = await loadSource(bannerSource);
+
+  if (!banner) {
+    const size = 160;
+    const canvas = createCanvas(size, size);
+    const ctx = canvas.getContext('2d');
+    gradient(ctx, size, size, '#121216', '#202026');
+    ctx.drawImage(cube, 16, 16, size - 32, size - 32);
+    return canvas.toBuffer('image/png');
+  }
+
+  const scale = Math.min(1, 1200 / banner.width);
+  const w = Math.max(320, Math.round(banner.width * scale));
+  const h = Math.max(180, Math.round(banner.height * scale));
+  const pad = Math.max(10, Math.round(w * 0.02));
+  const cubeSize = Math.min(112, Math.max(48, Math.round(w * 0.14)));
+
+  const canvas = createCanvas(w, h);
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(banner, 0, 0, w, h);
+
+  // Slight dark plate so the square stays visible on light banners.
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  rounded(ctx, pad - 5, pad - 5, cubeSize + 10, cubeSize + 10, 18);
+  ctx.fillStyle = '#0b0b0f';
+  ctx.fill();
+  ctx.restore();
+  ctx.drawImage(cube, pad, pad, cubeSize, cubeSize);
+
+  return canvas.toBuffer('image/png');
+}
+
 module.exports = {
   buildWelcomeCard,
+  buildWelcomeImage,
   buildProfileCard,
   buildLevelUpCard,
   buildLeaderboardCard,
