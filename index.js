@@ -237,12 +237,25 @@ function welcomeMessage(options) {
 function buildWelcomeEmbed(options, message) {
   const banner = welcomeBanner(options.guildId);
   const avatar = options.user?.displayAvatarURL?.({ size: 512, extension: 'png' });
-  const embed = new EmbedBuilder().setColor(config.colors.welcome);
-  if (message.title) embed.setTitle(message.title);
+  const botIcon = client.user?.displayAvatarURL?.({ size: 64, extension: 'png' });
+
+  // Member photo appears small at the top left via the embed author icon.
+  // The image you set with /welcome-card banner is the only full-size image.
+  const embed = new EmbedBuilder()
+    .setColor(config.colors.welcome)
+    .setAuthor({
+      name: options.guild?.name || config.brand?.footer || 'Welcome',
+      iconURL: avatar,
+    })
+    .setFooter({
+      text: config.brand?.footer || 'שומר הקהילה',
+      ...(botIcon ? { iconURL: botIcon } : {}),
+    });
+
+  if (message.title) embed.setTitle(`🎉 ${message.title}`);
   if (message.description) embed.setDescription(message.description);
-  const image = banner.url || avatar;
-  // Full-size image makes the whole message card bigger. Only one image is used.
-  if (image) embed.setImage(image);
+  if (banner.url) embed.setImage(banner.url);
+
   return { embed, files: banner.files };
 }
 
