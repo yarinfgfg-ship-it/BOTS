@@ -272,6 +272,16 @@ module.exports = {
     setupDone: '✅ ערוץ הברכות הוגדר לערוץ הזה. הודעה עם תמונת הפרופיל תישלח לכל חבר חדש.',
   },
 
+  // Card text — editable per server with /welcome-card text.
+  // Supported placeholders: {user}, {guild}, {count}, {date}
+  welcomeCard: {
+    greeting: 'ברוך הבא!',
+    hello: 'שלום',
+    line1: 'שמחים שהצטרפת ל־{guild}',
+    line2: 'אתה החבר מספר {count} בקהילה',
+    footer: '{guild} • {date}',
+  },
+
   // ---------------------------------------------------------------------
   // הצעות והצבעות — /suggest, /poll
   // ---------------------------------------------------------------------

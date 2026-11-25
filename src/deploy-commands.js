@@ -201,6 +201,59 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels)
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('welcome-card')
+    .setDescription('עריכת כל הטקסט והבאנר בכרטיס הברכה')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) =>
+      s
+        .setName('text')
+        .setDescription('הגדרת כל הטקסט בכרטיס (תומך ב־{user}, {guild}, {count}, {date})')
+        .addStringOption((o) =>
+          o.setName('greeting').setDescription('שורת הפתיחה בכרטיס').setMaxLength(80)
+        )
+        .addStringOption((o) =>
+          o.setName('hello').setDescription('המילה לפני שם המשתמש').setMaxLength(40)
+        )
+        .addStringOption((o) =>
+          o.setName('line1').setDescription('השורה הראשונה בגוף הכרטיס').setMaxLength(160)
+        )
+        .addStringOption((o) =>
+          o.setName('line2').setDescription('השורה השנייה בגוף הכרטיס').setMaxLength(160)
+        )
+        .addStringOption((o) =>
+          o.setName('footer').setDescription('שורת התחתית בכרטיס').setMaxLength(120)
+        )
+        .addBooleanOption((o) =>
+          o.setName('clear').setDescription('חזרה לטקסט ברירת המחדל')
+        )
+    )
+    .addSubcommandGroup((g) =>
+      g
+        .setName('banner')
+        .setDescription('בחירת התמונה הגדולה בכרטיס')
+        .addSubcommand((s) =>
+          s
+            .setName('upload')
+            .setDescription('העלאת קובץ תמונה')
+            .addAttachmentOption((o) =>
+              o.setName('image').setDescription('קובץ התמונה').setRequired(true)
+            )
+        )
+        .addSubcommand((s) =>
+          s
+            .setName('url')
+            .setDescription('שימוש בקישור תמונה')
+            .addStringOption((o) =>
+              o.setName('link').setDescription('קישור http(s)').setRequired(true)
+            )
+        )
+        .addSubcommand((s) =>
+          s.setName('remove').setDescription('הסרת הבאנר — תצלום החבר יופיע במקומו')
+        )
+    )
+    .addSubcommand((s) => s.setName('preview').setDescription('תצוגה מקדימה של הכרטיס'))
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('test')
     .setDescription('שליחת הודעת ברכה לדוגמה (לבדיקה)')
     .addStringOption((o) =>
@@ -601,9 +654,13 @@ const commands = [
 
 // דיסקורד לא מאפשר לבוטים לשנות הרשאות פקודות דרך ה־API, אז מסתירים את
 // פקודות הצוות כברירת מחדל ('0') ואוכפים בעלות בקוד. פקודות ציבור נשארות.
-// פקודות האדמין נשארות עם ManageGuild כדי שאדמינים יראו אותן, והגישה נבדקת
-// גם מול רולי האדמין בתוך הקוד.
-const ROLE_GATED_COMMANDS = new Set(['ticket-admin', 'ticket-admin-role']);
+// פקודות האדמין/הברכה נשארות עם ManageGuild כדי שאדמינים יראו אותן, והגישה
+// נבדקת גם בקוד.
+const ROLE_GATED_COMMANDS = new Set([
+  'ticket-admin',
+  'ticket-admin-role',
+  'welcome-card',
+]);
 const isStaffCommand = (c) =>
   Boolean(c.default_member_permissions) &&
   c.default_member_permissions !== '0' &&

@@ -7,7 +7,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 🎫 **Tickets** — panel **category dropdown** (pick a type → ticket opens instantly), private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
 - 🔐 **Ticket admins** — `/ticket-admin list/close/rename` to manage any ticket from anywhere, plus `/ticket-admin-role` to configure which roles can do it
 - ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
-- 👋 **Welcome** — redesigned reference-style card: dark panel with blue accent, server icon + name, member number, and the joining member's photo as the banner; `/test` previews the exact card
+- 👋 **Welcome** — reference-style card with the member's photo small to the left of the text, server icon + name, editable text, and a banner you choose with `/welcome-card banner`; `/welcome-card preview` shows the exact card
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
@@ -80,8 +80,15 @@ render.yaml           Render free service config
 | `/reverify user:@member` | Re-verify a member and refresh the profile |
 | `/join-role role:@role` | Role given on join, removed on verify |
 | `/welcome-setup` | Set welcome channel |
+| `/welcome-card text ...` | Edit all card text; supports `{user}`, `{guild}`, `{count}`, `{date}`; `clear: true` resets |
+| `/welcome-card banner upload image:...` | Upload the big banner image for this server |
+| `/welcome-card banner url link:...` | Use an image URL as the banner |
+| `/welcome-card banner remove` | Remove the banner (member photo is used again) |
+| `/welcome-card preview` | Preview the exact card privately |
 | `/test` | Preview the welcome embed |
 | `/beautify text:...` | Beautify text |
 | `/dm`, `/alert`, `/join-server` | Owner-only tools |
+
+Uploaded banners are saved under `DATA_DIR/welcome-banners`, so they survive restarts. `/welcome-card` is visible to members with **Manage Server**.
 
 `/ticket-admin` is shown to members with **Manage Server**; the configured admin roles are checked again in code. Give the admin role Manage Server if you want it to appear in the slash-command menu for those members.

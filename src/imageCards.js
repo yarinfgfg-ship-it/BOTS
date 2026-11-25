@@ -52,6 +52,22 @@ function drawCover(ctx, img, x, y, w, h) {
   ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
 }
 
+// Accepts a Buffer, a local file path or an http(s) URL.
+async function loadSource(src) {
+  if (!src) return null;
+  try {
+    if (Buffer.isBuffer(src)) return await loadImage(src);
+    if (/^https?:\/\//i.test(src)) {
+      const res = await fetch(src);
+      if (!res.ok) return null;
+      return await loadImage(Buffer.from(await res.arrayBuffer()));
+    }
+    return await loadImage(src);
+  } catch {
+    return null;
+  }
+}
+
 function gradient(ctx, w, h, from, to) {
   const g = ctx.createLinearGradient(0, 0, w, h);
   g.addColorStop(0, from);
@@ -89,13 +105,24 @@ function centered(ctx, text, y, font, color, w) {
   ctx.fillText(text, w / 2, y);
 }
 
-// Reference-style welcome card: dark Discord-like panel, blue accent bar,
-// server icon, member details and the joining member's photo as the banner.
-async function buildWelcomeCard({ avatarUrl, name, guildName, memberCount, guildIconUrl }) {
+// Reference-style welcome card. The member's photo sits small on the left of
+// the text; the wide banner uses the image chosen with /welcome-card banner.
+async function buildWelcomeCard({
+  avatarUrl,
+  name,
+  guildName,
+  memberCount,
+  guildIconUrl,
+  cardText = {},
+  bannerUrl,
+  bannerBuffer,
+}) {
   const W = 860;
   const H = 611;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
+
+  const text = (key, fallback) => plain(cardText[key] ?? fallback);
 
   ctx.fillStyle = '#1A1A1E';
   ctx.fillRect(0, 0, W, H);
@@ -116,20 +143,42 @@ async function buildWelcomeCard({ avatarUrl, name, guildName, memberCount, guild
   ctx.fill();
 
   ctx.textBaseline = 'middle';
+
+  // Small member photo, to the left of the greeting.
+  const avatarSize = 64;
+  const avatarX = left;
+  const avatarY = 38;
+  const memberPhoto = await loadSource(avatarUrl);
+  rounded(ctx, avatarX, avatarY, avatarSize, avatarSize, 10);
+  ctx.save();
+  ctx.clip();
+  if (memberPhoto) {
+    drawCover(ctx, memberPhoto, avatarX, avatarY, avatarSize, avatarSize);
+  } else {
+    ctx.fillStyle = '#2b2d38';
+    ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.lineWidth = 2;
+  rounded(ctx, avatarX, avatarY, avatarSize, avatarSize, 10);
+  ctx.stroke();
+
+  const textX = avatarX + avatarSize + 16;
   ctx.direction = 'rtl';
   ctx.textAlign = 'left';
   ctx.font = `bold 26px ${FONT}`;
   ctx.fillStyle = '#FBFBFB';
-  ctx.fillText('ברוך הבא!', left, 58);
+  ctx.fillText(shorten(text('greeting', 'ברוך הבא!'), 28), textX, 58);
   ctx.font = `18px ${FONT}`;
   ctx.fillStyle = '#ABACB2';
-  ctx.fillText(ltr(shorten(guildName || 'השרת', 34)), left, 92);
+  ctx.fillText(ltr(shorten(guildName || 'השרת', 34)), textX, 92);
 
   // Server icon (falls back to the first letter on a Discord-pink tile).
   const iconSize = 96;
   const iconX = right - iconSize;
   const iconY = 38;
-  const guildIcon = await loadAvatar(guildIconUrl);
+  const guildIcon = await loadSource(guildIconUrl);
   rounded(ctx, iconX, iconY, iconSize, iconSize, 10);
   ctx.save();
   ctx.clip();
@@ -157,17 +206,19 @@ async function buildWelcomeCard({ avatarUrl, name, guildName, memberCount, guild
   ctx.fillStyle = '#3B3B41';
   ctx.fillRect(left, 142, right - left, 1);
 
+  const hello = text('hello', 'שלום');
   ctx.direction = 'rtl';
   ctx.textAlign = 'left';
   ctx.font = `19px ${FONT}`;
   ctx.fillStyle = '#FBFBFB';
-  ctx.fillText('שלום', left, 172);
+  ctx.fillText(shorten(hello, 18), left, 172);
 
   const mention = `@${shorten(name || 'member', 24)}`;
   ctx.direction = 'ltr';
   ctx.font = `bold 18px ${FONT}`;
+  const helloWidth = ctx.measureText(hello).width;
   const pillW = Math.max(150, ctx.measureText(mention).width + 36);
-  const pillX = left + 44;
+  const pillX = left + Math.max(44, Math.ceil(helloWidth) + 16);
   const pillY = 156;
   const pillH = 30;
   rounded(ctx, pillX, pillY, pillW, pillH, 7);
@@ -180,23 +231,23 @@ async function buildWelcomeCard({ avatarUrl, name, guildName, memberCount, guild
   ctx.textAlign = 'left';
   ctx.font = `19px ${FONT}`;
   ctx.fillStyle = '#EFEFF1';
-  ctx.fillText(`שמחים שהצטרפת ל־${ltr(shorten(guildName || 'השרת', 26))}`, left, 216);
-  ctx.fillText(`אתה החבר מספר ${ltr(shorten(String(memberCount || 0), 8))} בקהילה`, left, 250);
+  ctx.fillText(shorten(text('line1', 'שמחים שהצטרפת לשרת'), 60), left, 216);
+  ctx.fillText(shorten(text('line2', `אתה החבר מספר ${memberCount || 0} בקהילה`), 60), left, 250);
 
   ctx.fillStyle = '#3B3B41';
   ctx.fillRect(left, 282, right - left, 1);
 
-  // The joining member's profile photo fills the wide banner area.
+  // Chosen banner; falls back to the member's photo until one is set.
   const photoX = left;
   const photoY = 296;
   const photoW = right - left;
   const photoH = 244;
-  const avatar = await loadAvatar(avatarUrl);
+  const banner = await loadSource(bannerBuffer || bannerUrl || avatarUrl);
   rounded(ctx, photoX, photoY, photoW, photoH, 6);
   ctx.save();
   ctx.clip();
-  if (avatar) {
-    drawCover(ctx, avatar, photoX, photoY, photoW, photoH);
+  if (banner) {
+    drawCover(ctx, banner, photoX, photoY, photoW, photoH);
   } else {
     ctx.fillStyle = '#2b2d38';
     ctx.fillRect(photoX, photoY, photoW, photoH);
@@ -207,19 +258,11 @@ async function buildWelcomeCard({ avatarUrl, name, guildName, memberCount, guild
   rounded(ctx, photoX, photoY, photoW, photoH, 6);
   ctx.stroke();
 
-  const stamp = new Date().toLocaleString('en-US', {
-    month: '2-digit',
-    day: '2-digit',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true,
-  });
   ctx.direction = 'ltr';
   ctx.textAlign = 'left';
   ctx.font = `16px ${FONT}`;
   ctx.fillStyle = '#ABACB2';
-  ctx.fillText(`${shorten(guildName || 'השרת', 34)} • ${stamp}`, left, 580);
+  ctx.fillText(shorten(text('footer', guildName || 'השרת'), 70), left, 580);
 
   return canvas.toBuffer('image/png');
 }

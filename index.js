@@ -1,6 +1,9 @@
 require('dotenv').config();
 
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const { storePath } = require('./src/store');
 
 const {
   Client,
@@ -122,6 +125,54 @@ function fill(text, vars) {
     out = out.split(`{${key}}`).join(String(value ?? ''));
   }
   return out;
+}
+
+function welcomeStamp() {
+  return new Date().toLocaleString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
+// Per-guild welcome card settings (text + chosen banner) from guilds.json.
+function welcomeCardOptions(guildId) {
+  const saved = guildConfig.get(guildId).welcomeCard || {};
+  const file = saved.bannerFile ? path.basename(saved.bannerFile) : null;
+  const bannerPath = file ? path.join(storePath('welcome-banners'), file) : null;
+  return {
+    cardText: { ...config.welcomeCard, ...(saved.text || {}) },
+    bannerUrl: saved.bannerUrl || null,
+    bannerBuffer:
+      bannerPath && fs.existsSync(bannerPath) ? fs.readFileSync(bannerPath) : null,
+  };
+}
+
+async function buildGuildWelcomeCard(guildId, user, memberCount, guild) {
+  const opts = welcomeCardOptions(guildId);
+  const vars = {
+    user: `<@${user.id}>`,
+    guild: guild?.name || '',
+    count: memberCount,
+    date: welcomeStamp(),
+  };
+  const cardText = {};
+  for (const [key, value] of Object.entries(opts.cardText)) {
+    cardText[key] = fill(value, vars);
+  }
+  return buildWelcomeCard({
+    avatarUrl: user.displayAvatarURL({ size: 512, extension: 'png' }),
+    name: user.globalName || user.username,
+    guildName: guild?.name || '',
+    memberCount,
+    guildIconUrl: guild?.iconURL?.({ size: 256, extension: 'png' }),
+    cardText,
+    bannerUrl: opts.bannerUrl,
+    bannerBuffer: opts.bannerBuffer,
+  });
 }
 
 function dateVars(date = new Date()) {
@@ -2324,13 +2375,12 @@ client.on(Events.GuildMemberAdd, async (member) => {
       (await member.guild.channels.fetch(channelId).catch(() => null));
     if (!channel || !channel.isTextBased() || channel.isDMBased()) return;
 
-    const card = await buildWelcomeCard({
-      avatarUrl: member.user.displayAvatarURL({ size: 512, extension: 'png' }),
-      name: member.user.globalName || member.user.username,
-      guildName: member.guild.name,
-      memberCount: member.guild.memberCount,
-      guildIconUrl: member.guild.iconURL({ size: 256, extension: 'png' }),
-    });
+    const card = await buildGuildWelcomeCard(
+      gid,
+      member.user,
+      member.guild.memberCount,
+      member.guild
+    );
     await channel.send({
       embeds: [
         buildWelcomeEmbed(member.user, member.guild).setImage('attachment://welcome.png'),
@@ -2466,6 +2516,106 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
+        case 'welcome-card': {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return reply(interaction, { content: '⚠️ נדרשת הרשאת ניהול שרת.' });
+          }
+
+          const gid = interaction.guild.id;
+          const saved = guildConfig.get(gid).welcomeCard || {};
+          const sub = interaction.options.getSubcommand();
+          const group = interaction.options.getSubcommandGroup();
+
+          if (sub === 'text') {
+            if (interaction.options.getBoolean('clear')) {
+              guildConfig.set(gid, { welcomeCard: { ...saved, text: {} } });
+              return reply(interaction, { content: '✅ טקסט כרטיס הברכה חזר לברירת המחדל.' });
+            }
+
+            const next = { ...(saved.text || {}) };
+            for (const key of ['greeting', 'hello', 'line1', 'line2', 'footer']) {
+              const value = interaction.options.getString(key);
+              if (value !== null) next[key] = value;
+            }
+            guildConfig.set(gid, { welcomeCard: { ...saved, text: next } });
+            return reply(interaction, {
+              content:
+                '✅ טקסט כרטיס הברכה נשמר. אפשר להשתמש ב־{user}, {guild}, {count}, {date}.',
+            });
+          }
+
+          if (group === 'banner') {
+            const dir = storePath('welcome-banners');
+
+            if (sub === 'remove') {
+              const oldFile = saved.bannerFile ? path.basename(saved.bannerFile) : null;
+              if (oldFile) {
+                const target = path.join(dir, oldFile);
+                if (fs.existsSync(target)) fs.unlinkSync(target);
+              }
+              guildConfig.set(gid, {
+                welcomeCard: { ...saved, bannerFile: null, bannerUrl: null },
+              });
+              return reply(interaction, {
+                content: '✅ הבאנר הוסר. בכרטיס יופיע שוב תצלום החבר המצטרף.',
+              });
+            }
+
+            if (sub === 'upload') {
+              const attachment = interaction.options.getAttachment('image');
+              if (!attachment || !/^image\//.test(attachment.contentType || '')) {
+                return reply(interaction, { content: '⚠️ יש לצרף קובץ תמונה.' });
+              }
+              const res = await fetch(attachment.url);
+              if (!res.ok) {
+                return reply(interaction, { content: '⚠️ לא ניתן להוריד את התמונה.' });
+              }
+              const buffer = Buffer.from(await res.arrayBuffer());
+              const rawExt = (path.extname(attachment.name || '').toLowerCase() || '.png')
+                .replace(/[^.a-z0-9]/g, '')
+                .slice(0, 5);
+              const ext = ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(rawExt)
+                ? rawExt
+                : '.png';
+              fs.mkdirSync(dir, { recursive: true });
+              const fileName = `${gid}${ext}`;
+              const oldFile = saved.bannerFile ? path.basename(saved.bannerFile) : null;
+              if (oldFile && oldFile !== fileName) {
+                const target = path.join(dir, oldFile);
+                if (fs.existsSync(target)) fs.unlinkSync(target);
+              }
+              fs.writeFileSync(path.join(dir, fileName), buffer);
+              guildConfig.set(gid, {
+                welcomeCard: { ...saved, bannerFile: fileName, bannerUrl: null },
+              });
+              return reply(interaction, { content: `✅ הבאנר נשמר: ${attachment.name}` });
+            }
+
+            if (sub === 'url') {
+              const link = interaction.options.getString('link');
+              if (!/^https?:\/\//i.test(link || '')) {
+                return reply(interaction, { content: '⚠️ הקישור חייב להתחיל ב־http(s).' });
+              }
+              guildConfig.set(gid, {
+                welcomeCard: { ...saved, bannerUrl: link, bannerFile: null },
+              });
+              return reply(interaction, { content: '✅ קישור הבאנר נשמר.' });
+            }
+          }
+
+          // `/welcome-card preview` — shows the exact card members will see.
+          const card = await buildGuildWelcomeCard(
+            gid,
+            interaction.user,
+            interaction.guild.memberCount,
+            interaction.guild
+          );
+          return interaction.reply({
+            files: [new AttachmentBuilder(card, { name: 'welcome-preview.png' })],
+            ephemeral: true,
+          });
+        }
+
         case 'test': {
           if (
             !OWNER_IDS.includes(interaction.user.id) &&
@@ -2484,13 +2634,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
             user = (await client.users.fetch(userId).catch(() => null)) || interaction.user;
           }
 
-          const card = await buildWelcomeCard({
-            avatarUrl: user.displayAvatarURL({ size: 512, extension: 'png' }),
-            name: user.globalName || user.username,
-            guildName: interaction.guild.name,
-            memberCount: interaction.guild.memberCount,
-            guildIconUrl: interaction.guild.iconURL({ size: 256, extension: 'png' }),
-          });
+          const card = await buildGuildWelcomeCard(
+            interaction.guild.id,
+            user,
+            interaction.guild.memberCount,
+            interaction.guild
+          );
 
           return interaction.reply({
             embeds: [
