@@ -129,6 +129,7 @@ function fill(text, vars) {
 
 function welcomeStamp() {
   return new Date().toLocaleString('en-US', {
+    timeZone: process.env.WELCOME_TIMEZONE || 'Asia/Jerusalem',
     month: '2-digit',
     day: '2-digit',
     year: 'numeric',
@@ -212,19 +213,10 @@ function brandEmbed(embed) {
   return embed;
 }
 
-// Shared by the real join event and /test so the preview matches exactly.
-function buildWelcomeEmbed(user, guild) {
-  return new EmbedBuilder()
-    .setColor(config.colors.welcome)
-    .setTitle(fill(config.memberWelcome.title, { guild: guild.name }))
-    .setDescription(
-      fill(config.memberWelcome.text, {
-        user: `<@${user.id}>`,
-        guild: guild.name,
-        count: guild.memberCount,
-      })
-    )
-    .setImage(user.displayAvatarURL({ size: 4096, extension: 'png' }));
+// All welcome text now lives inside the generated card. The embed is only a
+// clean frame for the image — no duplicated text and no unwanted @mention ping.
+function buildWelcomeEmbed() {
+  return new EmbedBuilder().setColor(config.colors.welcome);
 }
 
 // Turns plain text into a normal Discord message — like a person typed it.

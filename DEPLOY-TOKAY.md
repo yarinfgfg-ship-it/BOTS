@@ -32,6 +32,7 @@ Tokay נותנת **Free workspace קבוע** (לא trial, בלי כרטיס): 2 
 | `CLIENT_ID` | Config | `1572355509502218270` |
 | `BOT_OWNER_IDS` | Config | `1090650042030899262` |
 | `ENABLE_MEMBERS_INTENT` | Config | `true` |
+| `WELCOME_TIMEZONE` | Config | `Asia/Jerusalem` (אופציונלי — שעון בכרטיס הברכה) |
 | `AUTO_DEPLOY_COMMANDS` | Config | `true` |
 | `GUILDS_JSON` | Secret | תוכן `guilds.json` מ־Render |
 | `ADMIN_ROLE_IDS` | Config | **אופציונלי** — מזהי רולי אדמין לטיקטים, מופרדים בפסיקים (או `/ticket-admin-role add`) |
@@ -57,7 +58,7 @@ Tokay נותנת **Free workspace קבוע** (לא trial, בלי כרטיס): 2 
    [seed] data dir: /tokay/data
    ✅ Logged in as TicketFlow#9810
    ```
-4. אם בחרתם Web Service, פתחו את הכתובת ש־Tokay נתנה + `/health` → `ok`, ו־`/version` → `visual-v13-2026-11-25`.
+4. אם בחרתם Web Service, פתחו את הכתובת ש־Tokay נתנה + `/health` → `ok`, ו־`/version` → `visual-v14-2026-11-25`.
 
 ## אחרי המעבר
 
