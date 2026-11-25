@@ -216,13 +216,12 @@ function brandEmbed(embed) {
 }
 
 // The same editable text is shown as real Discord text AND baked into the image.
-// {user} becomes a plain @name here — never a real ping (no red mention).
+// In the message {user} is a real mention, so the new member actually gets tagged.
 function welcomeLines(guildId, user, memberCount, guild, displayName) {
   const saved = guildConfig.get(guildId).welcomeCard || {};
   const text = { ...config.welcomeCard, ...(saved.text || {}) };
-  const shownName = displayName || user.globalName || user.username;
   const vars = {
-    user: `@${shownName}`,
+    user: `<@${user.id}>`,
     guild: guild?.name || '',
     count: memberCount,
     date: welcomeStamp(),

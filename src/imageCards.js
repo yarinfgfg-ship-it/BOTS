@@ -135,8 +135,7 @@ async function buildWelcomeCard({
 
   const text = (key, fallback) => plain(cardText[key] ?? fallback);
 
-  ctx.fillStyle = '#1A1A1E';
-  ctx.fillRect(0, 0, W, H);
+  gradient(ctx, W, H, '#121216', '#202026');
 
   const cardX = 64;
   const cardY = 21;
@@ -145,52 +144,72 @@ async function buildWelcomeCard({
   const left = cardX + 18;
   const right = cardX + cardW - 18;
 
-  rounded(ctx, cardX, cardY, cardW, cardH, 6);
-  ctx.fillStyle = '#242429';
+  rounded(ctx, cardX, cardY, cardW, cardH, 14);
+  const cardFill = ctx.createLinearGradient(cardX, cardY, cardX + cardW, cardY + cardH);
+  cardFill.addColorStop(0, '#2C2C33');
+  cardFill.addColorStop(1, '#202025');
+  ctx.fillStyle = cardFill;
   ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.07)';
+  ctx.lineWidth = 1;
+  ctx.stroke();
 
-  rounded(ctx, cardX, cardY + 1, 6, cardH - 2, 3);
-  ctx.fillStyle = '#0099FF';
+  const accent = ctx.createLinearGradient(cardX, cardY, cardX, cardY + cardH);
+  accent.addColorStop(0, '#5865F2');
+  accent.addColorStop(0.55, '#0099FF');
+  accent.addColorStop(1, '#32C3FF');
+  rounded(ctx, cardX + 1, cardY + 12, 6, cardH - 24, 3);
+  ctx.fillStyle = accent;
   ctx.fill();
 
   ctx.textBaseline = 'middle';
 
-  // Small member photo, to the left of the greeting.
-  const avatarSize = 64;
+  // Small member photo, to the left of the greeting, with a soft blue glow.
+  const avatarSize = 72;
   const avatarX = left;
-  const avatarY = 38;
+  const avatarY = 34;
   const memberPhoto = await loadSource(avatarUrl);
-  rounded(ctx, avatarX, avatarY, avatarSize, avatarSize, 10);
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,153,255,0.5)';
+  ctx.shadowBlur = 24;
+  rounded(ctx, avatarX, avatarY, avatarSize, avatarSize, 16);
+  ctx.fillStyle = '#303038';
+  ctx.fill();
+  ctx.restore();
+  rounded(ctx, avatarX + 3, avatarY + 3, avatarSize - 6, avatarSize - 6, 13);
   ctx.save();
   ctx.clip();
   if (memberPhoto) {
-    drawCover(ctx, memberPhoto, avatarX, avatarY, avatarSize, avatarSize);
+    drawCover(ctx, memberPhoto, avatarX + 3, avatarY + 3, avatarSize - 6, avatarSize - 6);
   } else {
     ctx.fillStyle = '#2b2d38';
-    ctx.fillRect(avatarX, avatarY, avatarSize, avatarSize);
+    ctx.fillRect(avatarX + 3, avatarY + 3, avatarSize - 6, avatarSize - 6);
   }
   ctx.restore();
-  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.strokeStyle = '#0099FF';
   ctx.lineWidth = 2;
-  rounded(ctx, avatarX, avatarY, avatarSize, avatarSize, 10);
+  rounded(ctx, avatarX + 2, avatarY + 2, avatarSize - 4, avatarSize - 4, 14);
   ctx.stroke();
 
-  const textX = avatarX + avatarSize + 16;
+  const textX = avatarX + avatarSize + 18;
   ctx.direction = 'rtl';
   ctx.textAlign = 'left';
-  ctx.font = `bold 26px ${FONT}`;
-  ctx.fillStyle = '#FBFBFB';
-  ctx.fillText(shorten(text('greeting', 'ברוך הבא!'), 28), textX, 58);
-  ctx.font = `18px ${FONT}`;
-  ctx.fillStyle = '#ABACB2';
-  ctx.fillText(auto(shorten(guildName || 'השרת', 34)), textX, 92);
+  ctx.font = `bold 30px ${FONT}`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.shadowColor = 'rgba(0,0,0,0.4)';
+  ctx.shadowBlur = 8;
+  ctx.fillText(shorten(text('greeting', 'ברוך הבא!'), 26), textX, 60);
+  ctx.shadowBlur = 0;
+  ctx.font = `17px ${FONT}`;
+  ctx.fillStyle = '#B5BAC1';
+  ctx.fillText(auto(shorten(guildName || 'השרת', 32)), textX, 95);
 
   // Server icon (falls back to the first letter on a Discord-pink tile).
   const iconSize = 96;
   const iconX = right - iconSize;
   const iconY = 38;
   const guildIcon = await loadSource(guildIconUrl);
-  rounded(ctx, iconX, iconY, iconSize, iconSize, 10);
+  rounded(ctx, iconX, iconY, iconSize, iconSize, 22);
   ctx.save();
   ctx.clip();
   if (guildIcon) {
@@ -209,18 +228,22 @@ async function buildWelcomeCard({
     );
   }
   ctx.restore();
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 2;
-  rounded(ctx, iconX, iconY, iconSize, iconSize, 10);
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 1;
+  rounded(ctx, iconX, iconY, iconSize, iconSize, 22);
   ctx.stroke();
 
-  ctx.fillStyle = '#3B3B41';
+  const divider = ctx.createLinearGradient(left, 0, right, 0);
+  divider.addColorStop(0, 'rgba(0,153,255,0.6)');
+  divider.addColorStop(0.5, 'rgba(255,255,255,0.14)');
+  divider.addColorStop(1, 'rgba(0,153,255,0.08)');
+  ctx.fillStyle = divider;
   ctx.fillRect(left, 142, right - left, 1);
 
   const hello = text('hello', 'שלום');
   ctx.direction = 'rtl';
   ctx.textAlign = 'left';
-  ctx.font = `19px ${FONT}`;
+  ctx.font = `20px ${FONT}`;
   ctx.fillStyle = '#FBFBFB';
   ctx.fillText(shorten(hello, 18), left, 172);
 
@@ -228,52 +251,63 @@ async function buildWelcomeCard({
   ctx.direction = 'ltr';
   ctx.font = `bold 18px ${FONT}`;
   const helloWidth = ctx.measureText(hello).width;
-  const pillW = Math.max(150, ctx.measureText(mention).width + 36);
-  const pillX = left + Math.max(44, Math.ceil(helloWidth) + 16);
-  const pillY = 156;
-  const pillH = 30;
-  rounded(ctx, pillX, pillY, pillW, pillH, 7);
-  ctx.fillStyle = '#303359';
+  const pillW = Math.max(150, ctx.measureText(mention).width + 40);
+  const pillX = left + Math.max(44, Math.ceil(helloWidth) + 18);
+  const pillY = 155;
+  const pillH = 32;
+  rounded(ctx, pillX, pillY, pillW, pillH, 9);
+  const pillFill = ctx.createLinearGradient(pillX, pillY, pillX + pillW, pillY + pillH);
+  pillFill.addColorStop(0, '#5865F2');
+  pillFill.addColorStop(1, '#3B82F6');
+  ctx.fillStyle = pillFill;
   ctx.fill();
-  ctx.fillStyle = '#A9BBFF';
-  ctx.fillText(ltr(mention), pillX + 18, pillY + pillH / 2 + 1);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText(ltr(mention), pillX + 20, pillY + pillH / 2 + 1);
 
   ctx.direction = 'rtl';
   ctx.textAlign = 'left';
-  ctx.font = `19px ${FONT}`;
-  ctx.fillStyle = '#EFEFF1';
-  ctx.fillText(shorten(text('line1', 'שמחים שהצטרפת לשרת'), 60), left, 216);
-  ctx.fillText(shorten(text('line2', `אתה החבר מספר ${memberCount || 0} בקהילה`), 60), left, 250);
+  ctx.font = `20px ${FONT}`;
+  ctx.fillStyle = '#E6E8EB';
+  ctx.fillText(shorten(text('line1', 'שמחים שהצטרפת לשרת'), 60), left, 218);
+  ctx.fillText(shorten(text('line2', `אתה החבר מספר ${memberCount || 0} בקהילה`), 60), left, 254);
 
-  ctx.fillStyle = '#3B3B41';
-  ctx.fillRect(left, 282, right - left, 1);
+  ctx.fillStyle = divider;
+  ctx.fillRect(left, 286, right - left, 1);
 
   // Chosen banner; falls back to the member's photo until one is set.
   const photoX = left;
-  const photoY = 296;
+  const photoY = 300;
   const photoW = right - left;
-  const photoH = 244;
+  const photoH = 240;
   const banner = await loadSource(bannerBuffer || bannerUrl || avatarUrl);
-  rounded(ctx, photoX, photoY, photoW, photoH, 6);
+  rounded(ctx, photoX, photoY, photoW, photoH, 12);
   ctx.save();
   ctx.clip();
   if (banner) {
     drawCover(ctx, banner, photoX, photoY, photoW, photoH);
+    const shade = ctx.createLinearGradient(0, photoY + photoH - 90, 0, photoY + photoH);
+    shade.addColorStop(0, 'rgba(18,18,22,0)');
+    shade.addColorStop(1, 'rgba(18,18,22,0.5)');
+    ctx.fillStyle = shade;
+    ctx.fillRect(photoX, photoY + photoH - 90, photoW, 90);
   } else {
     ctx.fillStyle = '#2b2d38';
     ctx.fillRect(photoX, photoY, photoW, photoH);
   }
   ctx.restore();
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.16)';
   ctx.lineWidth = 1;
-  rounded(ctx, photoX, photoY, photoW, photoH, 6);
+  rounded(ctx, photoX + 0.5, photoY + 0.5, photoW - 1, photoH - 1, 12);
   ctx.stroke();
 
-  ctx.direction = 'rtl';
-  ctx.textAlign = 'left';
-  ctx.font = `16px ${FONT}`;
-  ctx.fillStyle = '#ABACB2';
-  ctx.fillText(auto(shorten(text('footer', guildName || 'השרת'), 70)), left, 580);
+  const footer = text('footer', '');
+  if (footer) {
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'left';
+    ctx.font = `15px ${FONT}`;
+    ctx.fillStyle = '#949BA4';
+    ctx.fillText(auto(shorten(footer, 70)), left, 578);
+  }
 
   return canvas.toBuffer('image/png');
 }

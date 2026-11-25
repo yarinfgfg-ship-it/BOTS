@@ -131,7 +131,7 @@ function start(onAuthorized) {
     // Build marker — lets us confirm which version the host is running.
     if (url.pathname === '/version') {
       res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-      return res.end('visual-v16-2026-11-25');
+      return res.end('visual-v17-2026-11-25');
     }
 
     if (url.pathname !== '/callback') {
