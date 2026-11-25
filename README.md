@@ -7,7 +7,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 🎫 **Tickets** — panel **category dropdown** (pick a type → ticket opens instantly), private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
 - 🔐 **Ticket admins** — `/ticket-admin list/close/rename` to manage any ticket from anywhere, plus `/ticket-admin-role` to configure which roles can do it
 - ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
-- 👋 **Welcome** — real Discord text in the message with a real @mention that pings the new member; the member's photo appears as the embed thumbnail at the top right of the message, not inside the image. The image has the editable text, server icon + name, and a banner you choose with `/welcome-card banner`. `/welcome-card preview` shows the exact result
+- 👋 **Welcome** — no generated image: just nicely formatted Discord text with a real @mention that pings the new member, plus one image — the member's photo, or the one you set with `/welcome-card banner`. `/welcome-card preview` shows the exact result
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
@@ -84,7 +84,7 @@ render.yaml           Render free service config
 | `/welcome-card banner upload image:...` | Upload the big banner image for this server |
 | `/welcome-card banner url link:...` | Use an image URL as the banner |
 | `/welcome-card banner remove` | Remove the banner (member photo is used again) |
-| `/welcome-card preview` | Preview the exact card privately |
+| `/welcome-card preview` | Preview the exact message privately |
 | `/test` | Preview the welcome embed |
 | `/beautify text:...` | Beautify text |
 | `/dm`, `/alert`, `/join-server` | Owner-only tools |
