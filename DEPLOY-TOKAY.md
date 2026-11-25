@@ -58,7 +58,7 @@ Tokay נותנת **Free workspace קבוע** (לא trial, בלי כרטיס): 2 
    [seed] data dir: /tokay/data
    ✅ Logged in as TicketFlow#9810
    ```
-4. אם בחרתם Web Service, פתחו את הכתובת ש־Tokay נתנה + `/health` → `ok`, ו־`/version` → `visual-v17-2026-11-25`.
+4. אם בחרתם Web Service, פתחו את הכתובת ש־Tokay נתנה + `/health` → `ok`, ו־`/version` → `visual-v18-2026-11-25`.
 
 ## אחרי המעבר
 

@@ -164,34 +164,9 @@ async function buildWelcomeCard({
 
   ctx.textBaseline = 'middle';
 
-  // Small member photo, to the left of the greeting, with a soft blue glow.
-  const avatarSize = 72;
-  const avatarX = left;
-  const avatarY = 34;
-  const memberPhoto = await loadSource(avatarUrl);
-  ctx.save();
-  ctx.shadowColor = 'rgba(0,153,255,0.5)';
-  ctx.shadowBlur = 24;
-  rounded(ctx, avatarX, avatarY, avatarSize, avatarSize, 16);
-  ctx.fillStyle = '#303038';
-  ctx.fill();
-  ctx.restore();
-  rounded(ctx, avatarX + 3, avatarY + 3, avatarSize - 6, avatarSize - 6, 13);
-  ctx.save();
-  ctx.clip();
-  if (memberPhoto) {
-    drawCover(ctx, memberPhoto, avatarX + 3, avatarY + 3, avatarSize - 6, avatarSize - 6);
-  } else {
-    ctx.fillStyle = '#2b2d38';
-    ctx.fillRect(avatarX + 3, avatarY + 3, avatarSize - 6, avatarSize - 6);
-  }
-  ctx.restore();
-  ctx.strokeStyle = '#0099FF';
-  ctx.lineWidth = 2;
-  rounded(ctx, avatarX + 2, avatarY + 2, avatarSize - 4, avatarSize - 4, 14);
-  ctx.stroke();
-
-  const textX = avatarX + avatarSize + 18;
+  // The member's photo belongs to the Discord message (embed thumbnail), not
+  // inside this image. Keep the card header purely typographic.
+  const textX = left;
   ctx.direction = 'rtl';
   ctx.textAlign = 'left';
   ctx.font = `bold 30px ${FONT}`;

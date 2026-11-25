@@ -238,17 +238,24 @@ function welcomeLines(guildId, user, memberCount, guild, displayName) {
   return lines;
 }
 
-function buildWelcomeEmbed(options) {
-  const lines = welcomeLines(
+function welcomeContent(options) {
+  return welcomeLines(
     options.guildId,
     options.user,
     options.memberCount,
     options.guild,
     options.displayName
-  );
-  return new EmbedBuilder()
-    .setColor(config.colors.welcome)
-    .setDescription(lines.join('\n'));
+  ).join('\n');
+}
+
+// The member's photo goes in the embed thumbnail (top right of the message),
+// not inside the generated picture. No text here — the text is message content,
+// which is the only place a real @mention actually pings anyone.
+function buildWelcomeEmbed(options) {
+  const embed = new EmbedBuilder().setColor(config.colors.welcome);
+  const avatar = options.user?.displayAvatarURL?.({ size: 256, extension: 'png' });
+  if (avatar) embed.setThumbnail(avatar);
+  return embed;
 }
 
 // Turns plain text into a normal Discord message — like a person typed it.
@@ -2406,16 +2413,17 @@ client.on(Events.GuildMemberAdd, async (member) => {
       member.guild,
       member.displayName
     );
+    const welcomeOptions = {
+      guildId: gid,
+      user: member.user,
+      memberCount: member.guild.memberCount,
+      guild: member.guild,
+      displayName: member.displayName,
+    };
     await channel.send({
-      embeds: [
-        buildWelcomeEmbed({
-          guildId: gid,
-          user: member.user,
-          memberCount: member.guild.memberCount,
-          guild: member.guild,
-          displayName: member.displayName,
-        }).setImage('attachment://welcome.png'),
-      ],
+      content: welcomeContent(welcomeOptions),
+      allowedMentions: { parse: ['users'] },
+      embeds: [buildWelcomeEmbed(welcomeOptions).setImage('attachment://welcome.png')],
       files: [new AttachmentBuilder(card, { name: 'welcome.png' })],
     });
     console.log(`[welcome] ${member.user.tag} joined ${member.guild.name} (#${member.guild.memberCount})`);
@@ -2642,15 +2650,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
             interaction.guild,
             interaction.member?.displayName
           );
+          const previewOptions = {
+            guildId: gid,
+            user: interaction.user,
+            memberCount: interaction.guild.memberCount,
+            guild: interaction.guild,
+            displayName: interaction.member?.displayName,
+          };
           return interaction.reply({
+            content: welcomeContent(previewOptions),
             embeds: [
-              buildWelcomeEmbed({
-                guildId: gid,
-                user: interaction.user,
-                memberCount: interaction.guild.memberCount,
-                guild: interaction.guild,
-                displayName: interaction.member?.displayName,
-              }),
+              buildWelcomeEmbed(previewOptions).setImage('attachment://welcome-preview.png'),
             ],
             files: [new AttachmentBuilder(card, { name: 'welcome-preview.png' })],
             ephemeral: true,
@@ -2684,16 +2694,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
             guildMember?.displayName || user.globalName || user.username
           );
 
+          const testOptions = {
+            guildId: interaction.guild.id,
+            user,
+            memberCount: interaction.guild.memberCount,
+            guild: interaction.guild,
+            displayName: guildMember?.displayName || user.globalName || user.username,
+          };
           return interaction.reply({
-            embeds: [
-              buildWelcomeEmbed({
-                guildId: interaction.guild.id,
-                user,
-                memberCount: interaction.guild.memberCount,
-                guild: interaction.guild,
-                displayName: guildMember?.displayName || user.globalName || user.username,
-              }).setImage('attachment://welcome.png'),
-            ],
+            content: welcomeContent(testOptions),
+            allowedMentions: { parse: ['users'] },
+            embeds: [buildWelcomeEmbed(testOptions).setImage('attachment://welcome.png')],
             files: [new AttachmentBuilder(card, { name: 'welcome.png' })],
             ephemeral: false,
           });
