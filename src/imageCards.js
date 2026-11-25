@@ -248,9 +248,170 @@ async function buildLeaderboardCard({ guildName, entries }) {
   return canvas.toBuffer('image/png');
 }
 
+// ---------------------------------------------------------------------------
+// Matching panel cards — same layout for tickets and verification.
+// ---------------------------------------------------------------------------
+
+// Canvas fonts have no emoji glyphs, so keep panel text emoji-free.
+function plain(text) {
+  return String(text ?? '')
+    .replace(/[\p{Extended_Pictographic}\uFE0F\u200D]/gu, '')
+    .replace(/[\u2600-\u27BF]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function rgba(hex, alpha) {
+  const raw = String(hex || '#5865F2').replace('#', '');
+  const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
+  const n = Number.parseInt(full, 16) || 0;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
+function rounded(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function drawPanelIcon(ctx, kind, cx, cy, accent) {
+  ctx.save();
+  ctx.strokeStyle = accent;
+  ctx.lineWidth = 7;
+  if (kind === 'ticket') {
+    rounded(ctx, cx - 52, cy - 34, 104, 68, 14);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - 12, cy - 34);
+    ctx.lineTo(cx - 12, cy + 34);
+    ctx.moveTo(cx + 12, cy - 34);
+    ctx.lineTo(cx + 12, cy + 34);
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(cx, cy, 42, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - 20, cy + 2);
+    ctx.lineTo(cx - 5, cy + 18);
+    ctx.lineTo(cx + 22, cy - 18);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+async function buildPanelCard({ kind, title, description, items = [], accent, eyebrow, caption }) {
+  const W = 1200;
+  const H = 675;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+
+  gradient(ctx, W, H, '#0f1224', '#241a3d');
+
+  ctx.fillStyle = 'rgba(255,255,255,0.035)';
+  for (let i = 0; i < 6; i += 1) {
+    ctx.beginPath();
+    ctx.arc(80 + i * 230, 640, 150, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  const glow = ctx.createRadialGradient(W - 150, 140, 10, W - 150, 140, 430);
+  glow.addColorStop(0, rgba(accent, 0.26));
+  glow.addColorStop(1, rgba(accent, 0));
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, W, 14);
+  ctx.strokeStyle = rgba(accent, 0.85);
+  ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, W - 6, H - 6);
+
+  drawPanelIcon(ctx, kind, W - 150, 150, accent);
+
+  ctx.direction = 'ltr';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.font = `bold 24px ${FONT}`;
+  ctx.fillStyle = rgba(accent, 0.95);
+  ctx.fillText(eyebrow, 70, 76);
+
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'right';
+  ctx.font = `bold 58px ${FONT}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(shorten(plain(title), 58), W - 70, 250);
+
+  ctx.font = `29px ${FONT}`;
+  ctx.fillStyle = '#cbd0e8';
+  ctx.fillText(shorten(plain(description), 110), W - 70, 322);
+
+  let x = W - 70;
+  let y = 420;
+  ctx.lineWidth = 2;
+  for (const raw of items.slice(0, 4)) {
+    const label = shorten(plain(raw), 26);
+    if (!label) continue;
+    ctx.font = `bold 25px ${FONT}`;
+    const width = Math.max(170, ctx.measureText(label).width + 60);
+    if (x - width < 60) {
+      x = W - 70;
+      y += 88;
+    }
+    rounded(ctx, x - width, y, width, 60, 16);
+    ctx.fillStyle = 'rgba(255,255,255,0.07)';
+    ctx.fill();
+    ctx.strokeStyle = rgba(accent, 0.5);
+    ctx.stroke();
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f4f5ff';
+    ctx.fillText(label, x - width / 2, y + 30);
+    x -= width + 16;
+  }
+
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'right';
+  ctx.font = `23px ${FONT}`;
+  ctx.fillStyle = '#9aa3c7';
+  ctx.fillText(caption, W - 70, H - 58);
+
+  return canvas.toBuffer('image/png');
+}
+
+async function buildTicketPanelCard({ title, description, categories = [] }) {
+  return buildPanelCard({
+    kind: 'ticket',
+    title,
+    description,
+    items: categories.slice(0, 4),
+    accent: '#7c8cff',
+    eyebrow: 'TICKET SYSTEM',
+    caption: 'לחצו על הכפתור למטה כדי לפתוח טיקט',
+  });
+}
+
+async function buildVerifyPanelCard({ title, description }) {
+  return buildPanelCard({
+    kind: 'verify',
+    title,
+    description,
+    items: ['לחצו על הכפתור הירוק', 'תפקיד מאומת יימסר לכם', 'התפקיד הלא מאומת יוסר'],
+    accent: '#57F287',
+    eyebrow: 'ONE-CLICK VERIFY',
+    caption: 'אימות מהיר ולחיצה אחת — בלי אתר ובלי קישור',
+  });
+}
+
 module.exports = {
   buildWelcomeCard,
   buildProfileCard,
   buildLevelUpCard,
   buildLeaderboardCard,
+  buildTicketPanelCard,
+  buildVerifyPanelCard,
 };

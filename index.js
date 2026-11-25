@@ -35,6 +35,8 @@ const {
   buildProfileCard,
   buildLevelUpCard,
   buildLeaderboardCard,
+  buildTicketPanelCard,
+  buildVerifyPanelCard,
 } = require('./src/imageCards');
 const levels = require('./src/levels');
 
@@ -309,6 +311,7 @@ async function refreshPanelEmbeds(guild, guildCfg) {
   const channels = [...guild.channels.cache.values()].filter(
     (ch) => ch.type === ChannelType.GuildText
   );
+  const visual = await panelVisual('ticket', guildCfg);
 
   let updated = 0;
   for (const channel of channels) {
@@ -331,9 +334,8 @@ async function refreshPanelEmbeds(guild, guildCfg) {
         if (guildCfg.panelDescription) {
           embed.setDescription(fill(guildCfg.panelDescription, dateVars()));
         }
-        if (guildCfg.imageUrl) embed.setImage(guildCfg.imageUrl);
-        else embed.setImage(null);
-        await panel.edit({ embeds: [embed] });
+        embed.setImage(visual.imageUrl);
+        await panel.edit({ embeds: [embed], files: visual.files });
         updated++;
       }
     } catch (err) {
@@ -350,6 +352,7 @@ async function refreshVerifyEmbeds(guild, guildCfg) {
   const channels = [...guild.channels.cache.values()].filter(
     (ch) => ch.type === ChannelType.GuildText
   );
+  const visual = await panelVisual('verify', guildCfg);
 
   let updated = 0;
   for (const channel of channels) {
@@ -364,9 +367,8 @@ async function refreshVerifyEmbeds(guild, guildCfg) {
       for (const panel of panels.values()) {
         if (!panel.embeds[0]) continue;
         const embed = EmbedBuilder.from(panel.embeds[0]);
-        if (guildCfg.verifyImageUrl) embed.setImage(guildCfg.verifyImageUrl);
-        else embed.setImage(null);
-        await panel.edit({ embeds: [embed] });
+        embed.setImage(visual.imageUrl);
+        await panel.edit({ embeds: [embed], files: visual.files });
         updated++;
       }
     } catch {
@@ -418,18 +420,45 @@ function ticketButtons({ claimed = false } = {}) {
   return row;
 }
 
-function verifyPanel(guildId) {
+/**
+ * Shared panel visual: a configured picture always wins, otherwise generate a
+ * branded canvas card with the same layout for tickets and verification.
+ */
+async function panelVisual(kind, guildCfg) {
+  const customUrl = kind === 'ticket' ? guildCfg.imageUrl : guildCfg.verifyImageUrl;
+  if (customUrl) return { imageUrl: customUrl, files: [] };
+
+  const name = kind === 'ticket' ? 'ticket-panel.png' : 'verify-panel.png';
+  const buffer =
+    kind === 'ticket'
+      ? await buildTicketPanelCard({
+          title: guildCfg.panelTitle || config.panel.title,
+          description: guildCfg.panelDescription || config.panel.description,
+          categories: guildCfg.categories || config.ticketCategories,
+        })
+      : await buildVerifyPanelCard({
+          title: config.verify.title,
+          description: config.verify.description,
+        });
+
+  return {
+    imageUrl: `attachment://${name}`,
+    files: [new AttachmentBuilder(buffer, { name })],
+  };
+}
+
+async function verifyPanel(guildId) {
   const embed = makeEmbed({
     title: config.verify.title,
     description: config.verify.description,
     color: config.colors.panel,
-    footerText: '',
+    footerText: config.brand.footer,
     showTimestamp: false,
     vars: {},
   });
 
-  const imageUrl = configFor(guildId).verifyImageUrl;
-  if (imageUrl) embed.setImage(imageUrl);
+  const visual = await panelVisual('verify', configFor(guildId));
+  embed.setImage(visual.imageUrl);
 
   // One click: grant the verified role and remove the unverified role.
   // No OAuth / external site involved.
@@ -441,7 +470,7 @@ function verifyPanel(guildId) {
       .setStyle(ButtonStyle.Success)
   );
 
-  return { embed: brandEmbed(embed), row };
+  return { embed: brandEmbed(embed), row, files: visual.files };
 }
 
 function verifyReplyPayload(guildId, content) {
@@ -2293,9 +2322,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
 
           const gid = interaction.guild.id;
-          const { embed, row } = verifyPanel(gid);
+          const { embed, row, files } = await verifyPanel(gid);
           try {
-            await interaction.channel.send({ embeds: [embed], components: [row] });
+            await interaction.channel.send({ embeds: [embed], components: [row], files });
           } catch (err) {
             return reply(interaction, {
               content:
@@ -3073,11 +3102,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
             title: guildCfg.panelTitle || config.panel.title,
             description: guildCfg.panelDescription || config.panel.description,
             color: config.colors.panel,
-            footerText: config.panel.footer,
+            footerText: config.panel.footer || config.brand.footer,
             showTimestamp: false,
             vars: dateVars(),
           });
-          if (guildCfg.imageUrl) embed.setImage(guildCfg.imageUrl);
+          const visual = await panelVisual('ticket', guildCfg);
+          embed.setImage(visual.imageUrl);
           brandEmbed(embed);
 
           const row = new ActionRowBuilder().addComponents(
@@ -3088,7 +3118,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
               .setStyle(ButtonStyle.Primary)
           );
 
-          await interaction.channel.send({ embeds: [embed], components: [row] });
+          await interaction.channel.send({
+            embeds: [embed],
+            components: [row],
+            files: visual.files,
+          });
           await reply(interaction, {
             content: fill(config.panel.reply, { user: `<@${interaction.user.id}>` }),
           });

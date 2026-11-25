@@ -560,21 +560,19 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
 
 (async () => {
   try {
-    const route = GUILD_ID
-      ? Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID)
-      : Routes.applicationCommands(CLIENT_ID);
-
-    console.log(`Registering ${commands.length} slash command(s)...`);
-    await rest.put(route, { body: commands });
+    // Register ONE set of commands globally. Registering the same names both
+    // globally and per-guild makes some Discord clients show each command twice.
+    console.log(`Registering ${commands.length} slash command(s) globally...`);
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
     console.log('✅ Slash commands registered globally.');
 
-    const instantGuilds = (INSTANT_GUILD_IDS || '')
-      .split(',')
-      .map((id) => id.trim())
+    // Remove old per-guild copies left by earlier deploys.
+    const oldGuilds = [GUILD_ID, ...(INSTANT_GUILD_IDS || '').split(',')]
+      .map((id) => (id || '').trim())
       .filter(Boolean);
-    for (const gid of instantGuilds) {
-      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, gid), { body: commands });
-      console.log(`✅ Slash commands registered instantly in guild ${gid}.`);
+    for (const gid of [...new Set(oldGuilds)]) {
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, gid), { body: [] });
+      console.log(`🧹 Cleared duplicate guild commands in ${gid}.`);
     }
   } catch (error) {
     console.error('❌ Failed to register commands:', error);

@@ -12,7 +12,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
 - 🎁 **Giveaways** — `/giveaway` with entry button, timer, multiple winners, winner DMs, cancel, reroll that excludes previous winners, restart-safe storage, and a generated 16:9 winner card with the winner's avatar + text baked in
 - 💡 **Suggestions & Polls** — richer suggestion/poll cards, a time picker, auto-decide for suggestions, and `/staff-hide` to hide staff commands from regular members
-- 🎨 **Canvas image cards** — generated welcome image, `/rank` profile card, level-up card, and a podium `/leaderboard` image (Hebrew text baked in, avatars included)
+- 🎨 **Canvas image cards** — generated welcome image, `/rank` profile card, level-up card, podium `/leaderboard`, plus matching branded **ticket and verify panel art** (Hebrew text baked in, avatars included)
 - 📈 **XP & coins** — earned from messages with a cooldown, saved in `levels.json`; powers the profile and leaderboard cards (no Message Content Intent needed)
 - 📦 **Sellable products** — 7 standalone bots in `bots/`
 
@@ -24,6 +24,8 @@ copy .env.example .env   # fill DISCORD_TOKEN, CLIENT_ID, etc.
 npm run deploy
 npm start
 ```
+
+`npm run deploy` registers one global command set and clears old per-guild copies — this is what prevents every command from appearing twice in Discord.
 
 ## 🛡️ AutoMod setup
 The bot creates Discord-native AutoMod rules on startup — no Message Content Intent needed. It needs **Manage Server** permission to create rules, so re-invite it with `npm run invite` (or grant that permission to its role). Edit the rule names, link regexes, timeout, and NSFW keyword list in `config.js` → `moderation`.

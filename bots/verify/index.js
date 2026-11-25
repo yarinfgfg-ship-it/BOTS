@@ -14,8 +14,10 @@ const {
   REST,
   Routes,
   Events,
+  AttachmentBuilder,
 } = require('discord.js');
 const config = require('./config');
+const { buildVerifyPanelCard } = require('./panelCard');
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
@@ -91,12 +93,25 @@ function brand(embed) {
   return embed.setFooter({ text: config.footer });
 }
 
-function panel(guildId) {
+async function panelVisual(guildId) {
+  if (cfg(guildId).verifyImageUrl) {
+    return { imageUrl: cfg(guildId).verifyImageUrl, files: [] };
+  }
+  const name = 'verify-panel.png';
+  const buffer = await buildVerifyPanelCard({
+    title: config.title,
+    description: config.description,
+  });
+  return { imageUrl: `attachment://${name}`, files: [new AttachmentBuilder(buffer, { name })] };
+}
+
+async function panel(guildId) {
   const embed = new EmbedBuilder()
     .setColor(config.colors.panel)
     .setTitle(config.title)
     .setDescription(config.description);
-  if (cfg(guildId).verifyImageUrl) embed.setImage(cfg(guildId).verifyImageUrl);
+  const visual = await panelVisual(guildId);
+  embed.setImage(visual.imageUrl);
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('verify_button')
@@ -104,7 +119,7 @@ function panel(guildId) {
       .setEmoji(config.buttonEmoji)
       .setStyle(ButtonStyle.Success)
   );
-  return { embeds: [brand(embed)], components: [row] };
+  return { embeds: [brand(embed)], components: [row], files: visual.files };
 }
 
 function verifyPayload(guildId, content) {
@@ -122,6 +137,7 @@ function verifyPayload(guildId, content) {
 }
 
 async function refreshVerifyPanels(guild) {
+  const visual = await panelVisual(guild.id);
   let updated = 0;
   for (const channel of guild.channels.cache.values()) {
     if (!channel.isTextBased() || channel.isDMBased()) continue;
@@ -136,9 +152,8 @@ async function refreshVerifyPanels(guild) {
         continue;
       }
       const embed = EmbedBuilder.from(m.embeds[0]);
-      if (cfg(guild.id).verifyImageUrl) embed.setImage(cfg(guild.id).verifyImageUrl);
-      else embed.setImage(null);
-      await m.edit({ embeds: [embed] }).catch(() => {});
+      embed.setImage(visual.imageUrl);
+      await m.edit({ embeds: [embed], files: visual.files }).catch(() => {});
       updated++;
     }
   }
@@ -189,7 +204,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const gid = interaction.guild.id;
 
       if (interaction.commandName === 'verify-setup') {
-        await interaction.channel.send(panel(gid));
+        await interaction.channel.send(await panel(gid));
         if (!cfg(gid).verifyRoleId) {
           const existing = interaction.guild.roles.cache.find((r) => r.name === config.roleName);
           const role = existing || (await interaction.guild.roles

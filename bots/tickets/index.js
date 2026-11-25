@@ -18,8 +18,10 @@ const {
   REST,
   Routes,
   Events,
+  AttachmentBuilder,
 } = require('discord.js');
 const config = require('./config');
+const { buildTicketPanelCard } = require('./panelCard');
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
@@ -122,7 +124,7 @@ function brand(embed) {
   return embed.setFooter({ text: config.footer });
 }
 
-function panel(guildId) {
+async function panel(guildId) {
   const categories = categoriesFor(guildId);
   const embed = new EmbedBuilder()
     .setColor(config.colors.panel)
@@ -134,6 +136,21 @@ function panel(guildId) {
       value: categories.map((c) => `• ${c.label}`).join('\n'),
     });
   }
+
+  let files = [];
+  if (cfg(guildId).imageUrl) {
+    embed.setImage(cfg(guildId).imageUrl);
+  } else {
+    const name = 'ticket-panel.png';
+    const buffer = await buildTicketPanelCard({
+      title: config.panelTitle,
+      description: config.panelDescription,
+      categories,
+    });
+    embed.setImage(`attachment://${name}`);
+    files = [new AttachmentBuilder(buffer, { name })];
+  }
+
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId('ticket_open')
@@ -141,7 +158,7 @@ function panel(guildId) {
       .setEmoji(config.buttonEmoji)
       .setStyle(ButtonStyle.Primary)
   );
-  return { embeds: [brand(embed)], components: [row] };
+  return { embeds: [brand(embed)], components: [row], files };
 }
 
 function ticketButtons(claimed = false) {
@@ -340,7 +357,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
           return reply(interaction, config.needPerm);
         }
-        await interaction.channel.send(panel(interaction.guild.id));
+        await interaction.channel.send(await panel(interaction.guild.id));
         return reply(interaction, config.setupDone);
       }
       return;
