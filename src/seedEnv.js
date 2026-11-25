@@ -9,7 +9,9 @@ require('dotenv').config();
 const root = path.join(__dirname, '..');
 const dataDir = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
-  : path.join(root, 'data');
+  : process.env.TOKAY_DATA_DIR
+    ? path.resolve(process.env.TOKAY_DATA_DIR)
+    : path.join(root, 'data');
 
 fs.mkdirSync(dataDir, { recursive: true });
 process.env.DATA_DIR = dataDir;

@@ -32,7 +32,7 @@ For AI scanning of explicit images/GIFs with no text, also enable Discord’s bu
 
 ## ☁️ Run 24/7 for free (no credit card)
 
-**Recommended: always-on host (no sleeping, no pinger needed)** — **[DEPLOY-ALWAYS-ON.md](DEPLOY-ALWAYS-ON.md)**
+**Recommended: Tokay** — permanent free workspace, no card, no sleeping — **[DEPLOY-TOKAY.md](DEPLOY-TOKAY.md)**. Other options: **[DEPLOY-ALWAYS-ON.md](DEPLOY-ALWAYS-ON.md)**
 
 Render Free is also possible but it sleeps after 15 minutes idle, so it needs an external monitor — **[DEPLOY-FREE.md](DEPLOY-FREE.md)**. GitHub Actions schedules are not reliable for this and should not be used as the pinger.
 

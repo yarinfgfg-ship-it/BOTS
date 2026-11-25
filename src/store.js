@@ -5,7 +5,9 @@ const path = require('path');
 // the project root so existing JSON files keep working exactly as before.
 const dataDir = process.env.DATA_DIR
   ? path.resolve(process.env.DATA_DIR)
-  : path.join(__dirname, '..');
+  : process.env.TOKAY_DATA_DIR
+    ? path.resolve(process.env.TOKAY_DATA_DIR)
+    : path.join(__dirname, '..');
 
 if (process.env.DATA_DIR) fs.mkdirSync(dataDir, { recursive: true });
 
