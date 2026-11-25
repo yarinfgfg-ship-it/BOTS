@@ -231,8 +231,9 @@ function welcomeMessage(options) {
   });
   return {
     content: `<@${options.user.id}>`, // actual Discord ping
-    title: greeting,
-    description: pretty.join('\n'),
+    // Discord markdown headings render larger; embed descriptions support them.
+    title: '',
+    description: greeting ? `# ${greeting}\n\n${pretty.join('\n')}` : pretty.join('\n'),
   };
 }
 
