@@ -36,16 +36,16 @@ const saveStore = () => fs.writeFileSync(storeFile, JSON.stringify(store, null, 
 const cfg = (id) => store[id] || (store[id] = {});
 
 const defaultCategories = [
-  { label: '📌 נושא אחר', value: 'other', description: 'כל נושא כללי שאינו מופיע באפשרויות האחרות' },
-  { label: '❓ שאלה כללית', value: 'question', description: 'דברים שאתם רוצים לדעת על השרת, הכללים והפעילות' },
+  { label: '❓ שאלה כללית', value: 'question', description: 'עובדות, כללים או פעילות שמתעוררת לגביה שאלה' },
   { label: '🛒 רכישה בשרת', value: 'purchase', description: 'תרומות, כלי רכב, עסקים והטבות' },
-  { label: '📝 מועמדות לצוות', value: 'staff-apply', description: 'הגשת פרטים ומבחן קבלה לצוות' },
-  { label: '⚖️ ערעור על עונש', value: 'ban-appeal', description: 'בקשה לבחון הרחקה או עונש שהוטל' },
-  { label: '🚨 דיווח על צוות', value: 'staff-report', description: 'סיפור על התנהלות של איש צוות שדורשת בדיקה' },
-  { label: '👮 דיווח על שחקן', value: 'player-report', description: 'מעשה שחרג מכללי ה-RP' },
-  { label: '🚫 דיווח על צ\'יטים', value: 'cheat-report', description: 'התראה דחופה על שימוש בהאקים או בצ\'יטים' },
-  { label: '🎭 דמות שנייה', value: 'second-character', description: 'בקשה להפעיל דמות נוספת בעולם ה-RP' },
-  { label: '🎥 אישור שידור', value: 'stream-approval', description: 'רול סטרימר/יוטיובר והיתר לייב' },
+  { label: '📝 מועמדות לצוות', value: 'staff-apply', description: 'שליחת פרטים ומבחן קבלה' },
+  { label: '⚖️ ערעור על עונש', value: 'ban-appeal', description: 'בדיקה חוזרת של הרחקה או סנקציה' },
+  { label: '🚨 דיווח על צוות', value: 'staff-report', description: 'מקרה שדורש התייחסות מהנהלה' },
+  { label: '👮 דיווח על שחקן', value: 'player-report', description: 'חריגה מכללי המשחק תפקידי' },
+  { label: '🚫 דיווח על צ\'יטים', value: 'cheat-report', description: 'עדכון דחוף על האקים או תוכנות לא חוקיות' },
+  { label: '🎭 דמות שנייה', value: 'second-character', description: 'אישור להפעלת דמות נוספת ב-RP' },
+  { label: '🎥 אישור שידור', value: 'stream-approval', description: 'בקשה לרול סטרימר/יוטיובר ולהיתר שידור' },
+  { label: '📌 משהו אחר', value: 'other', description: 'כשאין התאמה לאף אחת מהאפשרויות' },
 ];
 function categoriesFor(guildId) {
   const saved = cfg(guildId).categories;

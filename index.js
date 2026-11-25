@@ -85,29 +85,20 @@ function configFor(guildId) {
 }
 
 /**
- * Bring old saved panels up to the current long description and category list.
- * Hosts re-seed GUILDS_JSON on every boot, so this is safe to re-apply.
+ * Bring saved panels up to the current description + category list once per
+ * text version. Hosts re-seed GUILDS_JSON on boot, so this is safe to re-apply.
  */
+const PANEL_DEFAULTS_VERSION = 'v10-2026-11-25';
+
 function migrateTicketDefaults() {
   const all = guildConfig.load();
   let changed = false;
   for (const saved of Object.values(all)) {
-    if (
-      typeof saved.panelDescription === 'string' &&
-      /לחצו על הכפתור|מערכת התמיכה והעזרה/.test(saved.panelDescription)
-    ) {
+    if (saved.panelDefaultsVersion !== PANEL_DEFAULTS_VERSION) {
       saved.panelDescription = config.panel.description;
+      saved.categories = config.ticketCategories;
+      saved.panelDefaultsVersion = PANEL_DEFAULTS_VERSION;
       changed = true;
-    }
-    if (Array.isArray(saved.categories)) {
-      const labels = saved.categories.map((c) => c.label || '');
-      const stale =
-        labels.some((l) => /NFSW|NSFW|זונה|גיי/i.test(l)) ||
-        (labels.length <= 3 && labels.some((l) => /תמיכה|באג|שאלה/.test(l)));
-      if (stale) {
-        saved.categories = config.ticketCategories;
-        changed = true;
-      }
     }
   }
   if (changed) {
