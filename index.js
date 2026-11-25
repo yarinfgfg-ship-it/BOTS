@@ -186,13 +186,11 @@ function welcomeLines(guildId, user, memberCount, guild, displayName) {
     count: memberCount,
     date: welcomeStamp(),
   };
-  const lines = ['greeting', 'hello', 'line1', 'line2', 'footer']
+  // Only the real ping in message content shows an @. The embed text must not
+  // add a second one.
+  return ['greeting', 'hello', 'line1', 'line2', 'footer']
     .map((key) => fill(text[key] ?? config.welcomeCard[key], vars).trim())
     .filter(Boolean);
-  if (lines[1] && !lines[1].includes(vars.user)) {
-    lines[1] = `${lines[1]} ${vars.user}`;
-  }
-  return lines;
 }
 
 // One image only: the image chosen with /welcome-card banner, or the member's
@@ -2586,33 +2584,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
             }
 
             if (sub === 'upload') {
+              await interaction.deferReply({ ephemeral: true });
               const attachment = interaction.options.getAttachment('image');
-              if (!attachment || !/^image\//.test(attachment.contentType || '')) {
-                return reply(interaction, { content: '⚠️ יש לצרף קובץ תמונה.' });
+              const extFromName = path.extname(attachment?.name || '').toLowerCase();
+              const isImage =
+                /^image\//.test(attachment?.contentType || '') ||
+                ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(extFromName);
+              if (!attachment || !isImage) {
+                return interaction.editReply({ content: '⚠️ יש לצרף קובץ תמונה.' });
               }
-              const res = await fetch(attachment.url);
-              if (!res.ok) {
-                return reply(interaction, { content: '⚠️ לא ניתן להוריד את התמונה.' });
+              try {
+                const res = await fetch(attachment.url);
+                if (!res.ok) throw new Error(`CDN ${res.status}`);
+                const buffer = Buffer.from(await res.arrayBuffer());
+                const rawExt = (extFromName || '.png').replace(/[^.a-z0-9]/g, '').slice(0, 5);
+                const ext = ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(rawExt)
+                  ? rawExt
+                  : '.png';
+                fs.mkdirSync(dir, { recursive: true });
+                const fileName = `${gid}${ext}`;
+                const oldFile = saved.bannerFile ? path.basename(saved.bannerFile) : null;
+                if (oldFile && oldFile !== fileName) {
+                  const target = path.join(dir, oldFile);
+                  if (fs.existsSync(target)) fs.unlinkSync(target);
+                }
+                fs.writeFileSync(path.join(dir, fileName), buffer);
+                guildConfig.set(gid, {
+                  welcomeCard: { ...saved, bannerFile: fileName, bannerUrl: null },
+                });
+                return interaction.editReply({
+                  content: `✅ הבאנר נשמר: ${attachment.name}`,
+                });
+              } catch (err) {
+                console.error('[welcome-card upload]', err.message);
+                return interaction.editReply({
+                  content: '⚠️ ההעלאה נכשלה. נסה שוב עם קובץ תמונה קטן יותר.',
+                });
               }
-              const buffer = Buffer.from(await res.arrayBuffer());
-              const rawExt = (path.extname(attachment.name || '').toLowerCase() || '.png')
-                .replace(/[^.a-z0-9]/g, '')
-                .slice(0, 5);
-              const ext = ['.png', '.jpg', '.jpeg', '.webp', '.gif'].includes(rawExt)
-                ? rawExt
-                : '.png';
-              fs.mkdirSync(dir, { recursive: true });
-              const fileName = `${gid}${ext}`;
-              const oldFile = saved.bannerFile ? path.basename(saved.bannerFile) : null;
-              if (oldFile && oldFile !== fileName) {
-                const target = path.join(dir, oldFile);
-                if (fs.existsSync(target)) fs.unlinkSync(target);
-              }
-              fs.writeFileSync(path.join(dir, fileName), buffer);
-              guildConfig.set(gid, {
-                welcomeCard: { ...saved, bannerFile: fileName, bannerUrl: null },
-              });
-              return reply(interaction, { content: `✅ הבאנר נשמר: ${attachment.name}` });
             }
 
             if (sub === 'url') {
