@@ -1,19 +1,19 @@
 name: Keep Render bot awake
 
+# Free GitHub Actions cron (public repo) pings Render often enough that the
+# free web service never goes to sleep. No secrets are used.
 on:
   schedule:
-    # GitHub's minimum is 5 minutes. Render sleeps after ~15 minutes idle.
-    # Off-grid minutes avoid the crowded :00/:05/:10... schedule queue.
-    - cron: '3,8,13,18,23,28,33,38,43,48,53,58 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
   ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
     steps:
-      - name: Ping health endpoint
+      - name: Ping bot health endpoint
         run: |
-          echo "Pinging $(date -u +%FT%TZ)"
-          curl -fsS --retry 2 --retry-delay 3 --max-time 90 https://bots-xinz.onrender.com/health
-          echo
+          code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' 'https://bots-xinz.onrender.com/health' || true)
+          echo "Render health status: $code"
+          code2=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' 'https://bots-xinz.onrender.com/version' || true)
+          echo "Render version status: $code2"
