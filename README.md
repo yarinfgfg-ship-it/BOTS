@@ -7,7 +7,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 - 🎫 **Tickets** — panel **category dropdown** (pick a type → ticket opens instantly), private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
 - 🔐 **Ticket admins** — `/ticket-admin list/close/rename` to manage any ticket from anywhere, plus `/ticket-admin-role` to configure which roles can do it
 - ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
-- 👋 **Welcome** — Hebrew join message with the member's large avatar + member count
+- 👋 **Welcome** — redesigned reference-style card: dark panel with blue accent, server icon + name, member number, and the joining member's photo as the banner; `/test` previews the exact card
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt

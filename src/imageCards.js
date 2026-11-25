@@ -31,6 +31,27 @@ async function loadAvatar(url) {
   }
 }
 
+// Cover-fit an image into a box without stretching it.
+function drawCover(ctx, img, x, y, w, h) {
+  const iw = img.width;
+  const ih = img.height;
+  if (!iw || !ih) return;
+  const target = w / h;
+  const source = iw / ih;
+  let sx = 0;
+  let sy = 0;
+  let sw = iw;
+  let sh = ih;
+  if (source > target) {
+    sw = ih * target;
+    sx = (iw - sw) / 2;
+  } else {
+    sh = iw / target;
+    sy = (ih - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, x, y, w, h);
+}
+
 function gradient(ctx, w, h, from, to) {
   const g = ctx.createLinearGradient(0, 0, w, h);
   g.addColorStop(0, from);
@@ -68,38 +89,137 @@ function centered(ctx, text, y, font, color, w) {
   ctx.fillText(text, w / 2, y);
 }
 
-async function buildWelcomeCard({ avatarUrl, name, guildName, memberCount }) {
-  const W = 900;
-  const H = 500;
+// Reference-style welcome card: dark Discord-like panel, blue accent bar,
+// server icon, member details and the joining member's photo as the banner.
+async function buildWelcomeCard({ avatarUrl, name, guildName, memberCount, guildIconUrl }) {
+  const W = 860;
+  const H = 611;
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
-  gradient(ctx, W, H, '#161327', '#3b2a63');
-  ctx.fillStyle = 'rgba(255,255,255,0.04)';
-  for (let i = 0; i < 8; i += 1) {
-    ctx.beginPath();
-    ctx.arc(90 + i * 110, 430, 90, 0, Math.PI * 2);
-    ctx.fill();
+  ctx.fillStyle = '#1A1A1E';
+  ctx.fillRect(0, 0, W, H);
+
+  const cardX = 64;
+  const cardY = 21;
+  const cardW = 732;
+  const cardH = 569;
+  const left = cardX + 18;
+  const right = cardX + cardW - 18;
+
+  rounded(ctx, cardX, cardY, cardW, cardH, 6);
+  ctx.fillStyle = '#242429';
+  ctx.fill();
+
+  rounded(ctx, cardX, cardY + 1, 6, cardH - 2, 3);
+  ctx.fillStyle = '#0099FF';
+  ctx.fill();
+
+  ctx.textBaseline = 'middle';
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'left';
+  ctx.font = `bold 26px ${FONT}`;
+  ctx.fillStyle = '#FBFBFB';
+  ctx.fillText('ברוך הבא!', left, 58);
+  ctx.font = `18px ${FONT}`;
+  ctx.fillStyle = '#ABACB2';
+  ctx.fillText(ltr(shorten(guildName || 'השרת', 34)), left, 92);
+
+  // Server icon (falls back to the first letter on a Discord-pink tile).
+  const iconSize = 96;
+  const iconX = right - iconSize;
+  const iconY = 38;
+  const guildIcon = await loadAvatar(guildIconUrl);
+  rounded(ctx, iconX, iconY, iconSize, iconSize, 10);
+  ctx.save();
+  ctx.clip();
+  if (guildIcon) {
+    drawCover(ctx, guildIcon, iconX, iconY, iconSize, iconSize);
+  } else {
+    ctx.fillStyle = '#EB459F';
+    ctx.fillRect(iconX, iconY, iconSize, iconSize);
+    ctx.direction = 'ltr';
+    ctx.textAlign = 'center';
+    ctx.font = `bold 44px ${FONT}`;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(
+      ltr(String(guildName || 'S').trim().charAt(0).toUpperCase()),
+      iconX + iconSize / 2,
+      iconY + iconSize / 2 + 2
+    );
   }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 2;
+  rounded(ctx, iconX, iconY, iconSize, iconSize, 10);
+  ctx.stroke();
 
+  ctx.fillStyle = '#3B3B41';
+  ctx.fillRect(left, 142, right - left, 1);
+
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'left';
+  ctx.font = `19px ${FONT}`;
+  ctx.fillStyle = '#FBFBFB';
+  ctx.fillText('שלום', left, 172);
+
+  const mention = `@${shorten(name || 'member', 24)}`;
+  ctx.direction = 'ltr';
+  ctx.font = `bold 18px ${FONT}`;
+  const pillW = Math.max(150, ctx.measureText(mention).width + 36);
+  const pillX = left + 44;
+  const pillY = 156;
+  const pillH = 30;
+  rounded(ctx, pillX, pillY, pillW, pillH, 7);
+  ctx.fillStyle = '#303359';
+  ctx.fill();
+  ctx.fillStyle = '#A9BBFF';
+  ctx.fillText(ltr(mention), pillX + 18, pillY + pillH / 2 + 1);
+
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'left';
+  ctx.font = `19px ${FONT}`;
+  ctx.fillStyle = '#EFEFF1';
+  ctx.fillText(`שמחים שהצטרפת ל־${ltr(shorten(guildName || 'השרת', 26))}`, left, 216);
+  ctx.fillText(`אתה החבר מספר ${ltr(shorten(String(memberCount || 0), 8))} בקהילה`, left, 250);
+
+  ctx.fillStyle = '#3B3B41';
+  ctx.fillRect(left, 282, right - left, 1);
+
+  // The joining member's profile photo fills the wide banner area.
+  const photoX = left;
+  const photoY = 296;
+  const photoW = right - left;
+  const photoH = 244;
   const avatar = await loadAvatar(avatarUrl);
-  circleAvatar(ctx, avatar, W / 2 - 85, 35, 170, '#7c5cff');
+  rounded(ctx, photoX, photoY, photoW, photoH, 6);
+  ctx.save();
+  ctx.clip();
+  if (avatar) {
+    drawCover(ctx, avatar, photoX, photoY, photoW, photoH);
+  } else {
+    ctx.fillStyle = '#2b2d38';
+    ctx.fillRect(photoX, photoY, photoW, photoH);
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  rounded(ctx, photoX, photoY, photoW, photoH, 6);
+  ctx.stroke();
 
-  centered(ctx, 'ברוך הבא!', 258, `bold 52px ${FONT}`, '#ffffff', W);
-  centered(ctx, `@${ltr(shorten(name, 26))}`, 325, `bold 34px ${FONT}`, '#c9b8ff', W);
-  centered(
-    ctx,
-    `חבר מספר ${ltr(shorten(String(memberCount), 8))}`,
-    380,
-    `28px ${FONT}`,
-    '#e8e4ff',
-    W
-  );
-  centered(ctx, `ב־${ltr(shorten(guildName || 'השרת', 40))}`, 435, `24px ${FONT}`, '#b9b2cc', W);
-
-  ctx.strokeStyle = '#7c5cff';
-  ctx.lineWidth = 5;
-  ctx.strokeRect(3, 3, W - 6, H - 6);
+  const stamp = new Date().toLocaleString('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+  ctx.direction = 'ltr';
+  ctx.textAlign = 'left';
+  ctx.font = `16px ${FONT}`;
+  ctx.fillStyle = '#ABACB2';
+  ctx.fillText(`${shorten(guildName || 'השרת', 34)} • ${stamp}`, left, 580);
 
   return canvas.toBuffer('image/png');
 }

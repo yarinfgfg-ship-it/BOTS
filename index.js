@@ -2329,6 +2329,7 @@ client.on(Events.GuildMemberAdd, async (member) => {
       name: member.user.globalName || member.user.username,
       guildName: member.guild.name,
       memberCount: member.guild.memberCount,
+      guildIconUrl: member.guild.iconURL({ size: 256, extension: 'png' }),
     });
     await channel.send({
       embeds: [
@@ -2483,8 +2484,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
             user = (await client.users.fetch(userId).catch(() => null)) || interaction.user;
           }
 
+          const card = await buildWelcomeCard({
+            avatarUrl: user.displayAvatarURL({ size: 512, extension: 'png' }),
+            name: user.globalName || user.username,
+            guildName: interaction.guild.name,
+            memberCount: interaction.guild.memberCount,
+            guildIconUrl: interaction.guild.iconURL({ size: 256, extension: 'png' }),
+          });
+
           return interaction.reply({
-            embeds: [buildWelcomeEmbed(user, interaction.guild)],
+            embeds: [
+              buildWelcomeEmbed(user, interaction.guild).setImage('attachment://welcome.png'),
+            ],
+            files: [new AttachmentBuilder(card, { name: 'welcome.png' })],
             ephemeral: false,
           });
         }
