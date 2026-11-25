@@ -4,13 +4,13 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 
 ## ✨ Features
 
-- 🎫 **Tickets** — panel button, private channels, claim/rename/close, per-server settings
-- ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site)
+- 🎫 **Tickets** — panel button, private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
+- ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
 - 👋 **Welcome** — Hebrew join message with the member's large avatar + member count
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
 - 💅 **Beautify** — `/beautify` / `/betifuel` turns plain text into a nice Discord message
 - 🛡️ **AutoMod** — blocks links in every chat (deletes + 1-minute timeout), filters NSFW media/keywords; staff are exempt
-- 🎁 **Giveaways** — `/giveaway` with entry button, timer, auto winners, reroll, restart-safe storage, and a generated 16:9 winner card with the winner's avatar + text baked in
+- 🎁 **Giveaways** — `/giveaway` with entry button, timer, multiple winners, winner DMs, cancel, reroll that excludes previous winners, restart-safe storage, and a generated 16:9 winner card with the winner's avatar + text baked in
 - 💡 **Suggestions & Polls** — richer suggestion/poll cards, a time picker, auto-decide for suggestions, and `/staff-hide` to hide staff commands from regular members
 - 🎨 **Canvas image cards** — generated welcome image, `/rank` profile card, level-up card, and a podium `/leaderboard` image (Hebrew text baked in, avatars included)
 - 📈 **XP & coins** — earned from messages with a cooldown, saved in `levels.json`; powers the profile and leaderboard cards (no Message Content Intent needed)
@@ -51,8 +51,8 @@ config.js             all texts (edit without touching code)
 src/deploy-commands.js slash command registration
 src/store.js          persistent JSON storage (DATA_DIR)
 src/seedEnv.js        creates data dir + seeds JSON from env on any host
-bots/                 4 standalone sellable bots
-DEPLOY-ALWAYS-ON.md   recommended free 24/7 hosting guide
+bots/                 7 standalone sellable bots
+DEPLOY-TOKAY.md       recommended free 24/7 hosting guide
 DEPLOY-FREE.md        Render free hosting guide (needs a pinger)
 Dockerfile            cloud deployment
 render.yaml           Render free service config
@@ -63,8 +63,12 @@ render.yaml           Render free service config
 | Command | What it does |
 | --- | --- |
 | `/ticket-setup` | Post the ticket panel |
+| `/ticket-autoclose minutes:60 warn:5` | Auto-close idle tickets (0 = off) |
 | `/verify-setup` | Post the verify panel |
 | `/verify-role role:@role` | Choose the verified role |
+| `/verify-minage days:7` | Minimum account age to verify (0 = off) |
+| `/verify-log channel:#channel` | Verify audit-log channel |
+| `/reverify user:@member` | Re-verify a member and refresh the profile |
 | `/join-role role:@role` | Role given on join, removed on verify |
 | `/welcome-setup` | Set welcome channel |
 | `/test` | Preview the welcome embed |

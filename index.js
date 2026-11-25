@@ -400,6 +400,39 @@ function verifyPanel(guildId) {
   return { embed, row };
 }
 
+async function logVerification(
+  guildId,
+  user,
+  vars = {},
+  title = config.verify.logTitle,
+  description = config.verify.logDescription
+) {
+  const channelId = configFor(guildId).verifyLogChannelId;
+  if (!channelId) return;
+
+  const channel = await client.channels.fetch(channelId).catch(() => null);
+  if (!channel?.isTextBased()) return;
+
+  const embed = makeEmbed({
+    title,
+    description,
+    color: config.colors.panel,
+    footerText: '',
+    showTimestamp: true,
+    vars: {
+      user: `<@${user.id}>`,
+      tag: user.tag,
+      id: user.id,
+      created: `<t:${Math.floor(user.createdTimestamp / 1000)}:R>`,
+      ...vars,
+    },
+  });
+
+  await channel.send({ embeds: [embed] }).catch((err) =>
+    console.error('[verify] audit log:', err.message)
+  );
+}
+
 function withAuthorizeNote(guildId, userId, text) {
   if (!oauthServer.enabled()) return text;
   const link = oauthServer.authorizeUrl(guildId, userId);
@@ -725,6 +758,12 @@ async function createTicket(interaction, ticketCategory) {
     reason: `Ticket #${number} opened by ${user.tag}`,
   });
 
+  ticketConfig.set(channel.id, {
+    lastActivityAt: Date.now(),
+    warnedAt: 0,
+    category: ticketCategory?.value || 'default',
+  });
+
   const vars = {
     ...dateVars(),
     number,
@@ -894,21 +933,25 @@ async function askCloseConfirmation(interaction) {
   await reply(interaction, { embeds: [embed], components: [row] });
 }
 
-async function closeTicket(interaction) {
-  const channel = interaction.channel;
+async function performTicketClose(channel, { userId, tag, interaction = null } = {}) {
   if (!isTicketChannel(channel)) {
-    return reply(interaction, { content: '⚠️ זה אינו ערוץ טיקט.' });
+    if (interaction) await reply(interaction, { content: '⚠️ זה אינו ערוץ טיקט.' });
+    return;
   }
 
   const meta = getMeta(channel);
   const number = ticketNumber(channel);
-  const staffVars = { ...dateVars(), number, staff: `<@${interaction.user.id}>` };
-
-  await interaction.update({
+  const staffMention = userId ? `<@${userId}>` : config.close.autoClose.systemStaff;
+  const staffTag = tag || 'system';
+  const staffVars = { ...dateVars(), number, staff: staffMention };
+  const closingPayload = {
     content: fill(config.close.closingMessage, staffVars),
     embeds: [],
     components: [],
-  });
+  };
+
+  if (interaction) await interaction.update(closingPayload).catch(() => {});
+  else await channel.send(closingPayload).catch(() => {});
 
   // Build transcript
   const messages = [];
@@ -946,11 +989,11 @@ async function closeTicket(interaction) {
     number,
     user: meta.creator ? `<@${meta.creator}>` : 'unknown',
     username: meta.creator ? (await client.users.fetch(meta.creator).catch(() => null))?.username || 'unknown' : 'unknown',
-    staff: `<@${interaction.user.id}>`,
+    staff: staffMention,
   };
 
   // Log transcript
-  const logChannelId = configFor(interaction.guild.id).logChannel;
+  const logChannelId = configFor(channel.guild.id).logChannel;
   if (logChannelId) {
     const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
     if (logChannel && logChannel.isTextBased()) {
@@ -983,35 +1026,226 @@ async function closeTicket(interaction) {
         showTimestamp: config.ticket.showTimestamp,
         vars,
       });
-      await creator.send({ embeds: [dmEmbed] }).catch(() => {
-        channel.send(config.dm.failureNote).catch(() => {});
+      const ratingRow = new ActionRowBuilder().addComponents(
+        config.close.rating.labels.map((label, index) =>
+          new ButtonBuilder()
+            .setCustomId(
+              `ticket_rate:${channel.guild.id}:${creator.id}:${number}:${index + 1}`
+            )
+            .setLabel(label)
+            .setStyle(ButtonStyle.Secondary)
+        )
+      );
+
+      const ratingEmbed = makeEmbed({
+        title: config.close.rating.title,
+        description: config.close.rating.description,
+        color: config.colors.panel,
+        footerText: '',
+        showTimestamp: false,
+        vars: { number },
       });
+
+      await creator
+        .send({ embeds: [dmEmbed, ratingEmbed], components: [ratingRow] })
+        .catch(() => {
+          channel.send(config.dm.failureNote).catch(() => {});
+        });
     }
   }
 
-  await channel.delete(`Ticket #${number} closed by ${interaction.user.tag}`).catch((err) =>
+  await channel.delete(`Ticket #${number} closed by ${staffTag}`).catch((err) =>
     console.error('[ticket] Failed to delete channel:', err.message)
   );
   ticketConfig.remove(channel.id);
 
-  console.log(`[ticket] Closed #${number} by ${interaction.user.tag}`);
+  console.log(`[ticket] Closed #${number} by ${staffTag}`);
+}
+
+async function closeTicket(interaction) {
+  await performTicketClose(interaction.channel, {
+    userId: interaction.user.id,
+    tag: interaction.user.tag,
+    interaction,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* Ticket inactivity + post-close rating                               */
+/* ------------------------------------------------------------------ */
+
+async function touchTicketActivity(channel) {
+  if (!channel || !isTicketChannel(channel)) return;
+  ticketConfig.set(channel.id, { lastActivityAt: Date.now(), warnedAt: 0 });
+}
+
+function ticketIdleSettings(guildId) {
+  const cfg = configFor(guildId);
+  return {
+    minutes: Math.max(0, Number(cfg.ticketAutoCloseMinutes ?? 0) || 0),
+    warn: Math.max(1, Number(cfg.ticketAutoCloseWarnMinutes ?? 5) || 5),
+  };
+}
+
+let autoCloseRunning = false;
+
+async function ticketAutoCloseTick() {
+  if (autoCloseRunning) return;
+  autoCloseRunning = true;
+  try {
+    for (const guild of client.guilds.cache.values()) {
+      const settings = ticketIdleSettings(guild.id);
+      if (!settings.minutes) continue;
+
+      for (const channel of guild.channels.cache.values()) {
+        try {
+          if (!isTicketChannel(channel)) continue;
+          if (getMeta(channel).status === 'closed') continue;
+
+          const data = ticketConfig.get(channel.id);
+          const last = Number(data.lastActivityAt) || Date.now();
+          if (!data.lastActivityAt) {
+            ticketConfig.set(channel.id, { lastActivityAt: last });
+            continue;
+          }
+
+          const idleMs = Date.now() - last;
+          const idleMinutes = Math.floor(idleMs / 60_000);
+
+          if (idleMs < settings.minutes * 60_000) continue;
+
+          const warnedAt = Number(data.warnedAt) || 0;
+          if (!warnedAt) {
+            ticketConfig.set(channel.id, { warnedAt: Date.now() });
+            const warnVars = {
+              ...dateVars(),
+              number: ticketNumber(channel),
+              minutes: idleMinutes,
+              warn: settings.warn,
+            };
+            const row = new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId('ticket_stay')
+                .setLabel(config.close.autoClose.stayButton)
+                .setEmoji('🔄')
+                .setStyle(ButtonStyle.Secondary)
+            );
+            const embed = makeEmbed({
+              title: config.close.autoClose.warningTitle,
+              description: config.close.autoClose.warningDescription,
+              color: config.colors.claimed,
+              footerText: '',
+              showTimestamp: false,
+              vars: warnVars,
+            });
+            await channel.send({ embeds: [embed], components: [row] }).catch(() => {});
+          } else if (Date.now() - warnedAt >= settings.warn * 60_000) {
+            await performTicketClose(channel, { tag: 'autoclose' });
+          }
+        } catch (err) {
+          console.error(`[autoclose] ${channel.id}: ${err.message}`);
+        }
+      }
+    }
+  } finally {
+    autoCloseRunning = false;
+  }
+}
+
+async function handleTicketStay(interaction) {
+  if (!isTicketChannel(interaction.channel)) {
+    return reply(interaction, { content: '⚠️ זה אינו ערוץ טיקט.' });
+  }
+  await touchTicketActivity(interaction.channel);
+  return interaction.update({
+    content: config.close.autoClose.stayed,
+    embeds: [],
+    components: [],
+  });
+}
+
+async function handleTicketRating(interaction) {
+  // ticket_rate:<guildId>:<creatorId>:<number>:<score>
+  const [, guildId, creatorId, number, scoreText] = interaction.customId.split(':');
+  const score = Number(scoreText);
+
+  if (creatorId !== interaction.user.id) {
+    return interaction.reply({ content: '⚠️ רק יוצר הטיקט יכול לדרג אותו.' }).catch(() => {});
+  }
+  if (!Number.isInteger(score) || score < 1 || score > config.close.rating.labels.length) {
+    return interaction.reply({ content: '⚠️ דירוג לא תקין.' }).catch(() => {});
+  }
+
+  const stars = config.close.rating.labels[score - 1];
+  await interaction
+    .update({ content: fill(config.close.rating.thanks, { stars }), components: [] })
+    .catch(() => {});
+
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    const cfg = configFor(guildId);
+    const logChannelId = cfg.logChannel || config.ids.logChannel;
+    const logChannel = logChannelId ? await client.channels.fetch(logChannelId).catch(() => null) : null;
+    if (logChannel?.isTextBased()) {
+      const embed = makeEmbed({
+        title: config.close.rating.logTitle,
+        description: config.close.rating.logDescription,
+        color: config.colors.log,
+        footerText: '',
+        showTimestamp: true,
+        vars: {
+          number,
+          user: interaction.user.id,
+          tag: interaction.user.tag,
+          stars,
+        },
+      });
+      await logChannel.send({ embeds: [embed] }).catch(() => {});
+    }
+  } catch (err) {
+    console.error('[rating] log:', err.message);
+  }
 }
 
 /* ------------------------------------------------------------------ */
 /* Giveaways                                                           */
 /* ------------------------------------------------------------------ */
 
+function giveawayWinnerCount(g) {
+  if (Array.isArray(g.winners)) return g.winners.length;
+  return Number(g.winners) || 1;
+}
+
 function giveawayEmbed(g) {
   const count = (g.entrants || []).length;
   const roleLine = g.roleId ? `\n🎭 דרישה: <@&${g.roleId}>` : '';
+  const winnerCount = giveawayWinnerCount(g);
+  let title = `🎉 ${g.prize}`;
+  let description =
+    `לחצו על הכפתור כדי להיכנס!\n\n👥 משתתפים: **${count}**\n` +
+    `🏆 זוכים: **${winnerCount}**\n⏰ מסתיים: <t:${Math.floor(g.endsAt / 1000)}:R>${roleLine}`;
+
+  if (g.ended) {
+    if (g.cancelled) {
+      title = fill(config.giveaway.cancelledTitle, { prize: g.prize });
+      description = fill(config.giveaway.cancelledDescription, { count });
+    } else {
+      title = `🎉 ${g.prize} — הסתיים`;
+      const winnerNames = Array.isArray(g.winners) && g.winners.length
+        ? g.winners.map((id) => `<@${id}>`).join(', ')
+        : config.giveaway.winnerListFallback;
+      description = fill(config.giveaway.endedDescription, {
+        count,
+        winners: winnerNames,
+        time: Math.floor((g.endedAt || Date.now()) / 1000),
+      });
+    }
+  }
+
   return new EmbedBuilder()
-    .setColor(config.giveaway.color)
-    .setTitle(g.ended ? `🎉 ${g.prize} — הסתיים` : `🎉 ${g.prize}`)
-    .setDescription(
-      g.ended
-        ? `👥 משתתפים: **${count}**\n🏆 זוכים: **${g.winners}**`
-        : `לחצו על הכפתור כדי להיכנס!\n\n👥 משתתפים: **${count}**\n🏆 זוכים: **${g.winners}**\n⏰ מסתיים: <t:${Math.floor(g.endsAt / 1000)}:R>${roleLine}`
-    )
+    .setColor(g.cancelled ? config.colors.closed : config.giveaway.color)
+    .setTitle(title)
+    .setDescription(description)
     .setFooter({ text: `מארח: ${g.hostTag || 'יוצר השרת'}` })
     .setTimestamp();
 }
@@ -1072,6 +1306,26 @@ async function announceWinners(channel, g, winnerIds, reroll = false) {
 
     payload.embeds = [embed];
     await channel.send(payload).catch(() => {});
+
+    // Winner DM — same card, no server name, never blocks the announcement.
+    if (user) {
+      try {
+        const dmPayload = {
+          embeds: [
+            new EmbedBuilder()
+              .setColor(config.giveaway.color)
+              .setTitle(config.giveaway.dmTitle)
+              .setDescription(fill(config.giveaway.dmText, { prize: g.prize })),
+          ],
+        };
+        if (buffer) {
+          dmPayload.files = [new AttachmentBuilder(buffer, { name: 'winner.png' })];
+        }
+        await user.send(dmPayload);
+      } catch (err) {
+        console.error('[giveaway] winner DM:', err.message);
+      }
+    }
   }
 }
 
@@ -1091,8 +1345,13 @@ async function endGiveaway(id) {
   const g = giveaways.get(id);
   if (!g || g.ended) return;
 
-  const winners = pickWinners(g.entrants || [], g.winners || 1);
-  giveaways.set(id, { ended: true, endedAt: Date.now(), winners });
+  const winners = pickWinners(g.entrants || [], giveawayWinnerCount(g));
+  giveaways.set(id, {
+    ended: true,
+    endedAt: Date.now(),
+    winners,
+    rerollWinners: [],
+  });
 
   const channel = await client.channels.fetch(g.channelId).catch(() => null);
   if (!channel) return;
@@ -1210,17 +1469,57 @@ async function giveawayByMessage(interaction) {
 async function rerollGiveaway(interaction) {
   const g = await giveawayByMessage(interaction);
   if (!g) return reply(interaction, { content: '⚠️ לא נמצאה הגרלה עם המזהה הזה.' });
+  if (!g.ended) return reply(interaction, { content: config.giveaway.alreadyEnded });
 
-  const excluded = g.rerollWinners || [];
-  const [winnerId] = pickWinners(g.entrants || [], 1, excluded);
-  if (!winnerId) return reply(interaction, { content: config.giveaway.noReroll });
+  const requested = Math.max(1, Math.min(10, interaction.options.getInteger('count') || 1));
+  // Original winners and everyone picked by earlier rerolls must not win again.
+  const excluded = [
+    ...(g.rerollWinners || []),
+    ...(Array.isArray(g.winners) ? g.winners : []),
+  ];
+  const winners = pickWinners(g.entrants || [], requested, excluded);
+  if (!winners.length) return reply(interaction, { content: config.giveaway.noReroll });
 
-  giveaways.set(g.id, { rerollWinners: [...excluded, winnerId] });
+  giveaways.set(g.id, {
+    rerollWinners: [...new Set([...excluded, ...winners])],
+  });
 
   const channel = await client.channels.fetch(g.channelId).catch(() => null);
-  if (channel) await announceWinners(channel, g, [winnerId], true);
+  if (channel) await announceWinners(channel, g, winners, true);
 
-  return reply(interaction, { content: '✅ נשלחה הודעת זוכה חדשה.' });
+  return reply(interaction, {
+    content: fill(config.giveaway.rerollDone, { count: winners.length }),
+  });
+}
+
+async function cancelGiveaway(interaction) {
+  const g = await giveawayByMessage(interaction);
+  if (!g) return reply(interaction, { content: '⚠️ לא נמצאה הגרלה עם המזהה הזה.' });
+  if (g.ended) return reply(interaction, { content: config.giveaway.alreadyEnded });
+
+  const cancelled = {
+    ...g,
+    ended: true,
+    cancelled: true,
+    endedAt: Date.now(),
+    winners: [],
+  };
+  giveaways.set(g.id, {
+    ended: true,
+    cancelled: true,
+    endedAt: cancelled.endedAt,
+    winners: [],
+  });
+
+  const channel = await client.channels.fetch(g.channelId).catch(() => null);
+  const message = channel ? await channel.messages.fetch(g.messageId).catch(() => null) : null;
+  if (message) {
+    await message
+      .edit({ embeds: [giveawayEmbed(cancelled)], components: [] })
+      .catch(() => {});
+  }
+
+  return reply(interaction, { content: config.giveaway.cancelledDone });
 }
 
 async function listGiveaways(interaction) {
@@ -1795,6 +2094,11 @@ client.once(Events.ClientReady, async (c) => {
   await restoreGiveaways();
   await restoreCommunity();
 
+  // Inactivity auto-close (off by default until /ticket-autoclose is set).
+  setInterval(() => {
+    ticketAutoCloseTick().catch((err) => console.error('[autoclose]', err.message));
+  }, 60_000).unref?.();
+
   console.log(`   Tickets category: ${config.ids.category || 'NOT SET'}`);
   console.log(`   Support roles: ${config.ids.supportRoles.join(', ') || 'NOT SET'}`);
 
@@ -1881,6 +2185,11 @@ client.on(Events.GuildMemberAdd, async (member) => {
 client.on(Events.MessageCreate, async (message) => {
   try {
     if (message.author.bot || !message.guild) return;
+
+    if (isTicketChannel(message.channel)) {
+      await touchTicketActivity(message.channel);
+    }
+
     const result = levels.addMessage(message.guild.id, message.author.id);
     if (!result?.leveledUp) return;
 
@@ -2071,6 +2380,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             return reply(interaction, { content: '✅ ההגרלה נסגרה.' });
           }
           if (sub === 'reroll') return await rerollGiveaway(interaction);
+          if (sub === 'cancel') return await cancelGiveaway(interaction);
           if (sub === 'list') return await listGiveaways(interaction);
           return reply(interaction, { content: '⚠️ פעולה לא מוכרת.' });
         }
@@ -2201,6 +2511,95 @@ client.on(Events.InteractionCreate, async (interaction) => {
           guildConfig.set(gid, { unverifiedRoleId: chosen.id });
           return reply(interaction, {
             content: fill(config.verify.unverifiedSet, { role: chosen.id }),
+          });
+        }
+
+        case 'verify-minage': {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return reply(interaction, { content: '⚠️ נדרשת הרשאת ניהול שרת.' });
+          }
+          const days = Math.max(0, interaction.options.getInteger('days', true));
+          guildConfig.set(interaction.guild.id, { verifyMinAgeDays: days });
+          return reply(interaction, {
+            content: fill(config.verify.minAgeSet, { days }),
+          });
+        }
+
+        case 'verify-log': {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return reply(interaction, { content: '⚠️ נדרשת הרשאת ניהול שרת.' });
+          }
+
+          const gid = interaction.guild.id;
+          if (interaction.options.getBoolean('clear')) {
+            guildConfig.set(gid, { verifyLogChannelId: null });
+            return reply(interaction, { content: config.verify.logCleared });
+          }
+
+          const chosen = interaction.options.getChannel('channel');
+          if (!chosen) {
+            const current = configFor(gid).verifyLogChannelId;
+            return reply(interaction, {
+              content: current
+                ? fill(config.verify.logCurrent, { channel: current })
+                : config.verify.logNone,
+            });
+          }
+          if (!chosen.isTextBased()) {
+            return reply(interaction, { content: '⚠️ צריך לבחור ערוץ טקסט.' });
+          }
+
+          guildConfig.set(gid, { verifyLogChannelId: chosen.id });
+          return reply(interaction, {
+            content: fill(config.verify.logSet, { channel: chosen.id }),
+          });
+        }
+
+        case 'reverify': {
+          if (
+            !isOwnerUser(interaction) &&
+            !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)
+          ) {
+            return reply(interaction, { content: '⚠️ נדרשת הרשאת ניהול שרת.' });
+          }
+
+          const gid = interaction.guild.id;
+          const target = interaction.options.getUser('user', true);
+          const cfg = configFor(gid);
+          if (!cfg.verifyRoleId) {
+            return reply(interaction, { content: config.verify.noRole });
+          }
+
+          const member = await interaction.guild.members.fetch(target.id).catch(() => null);
+          if (!member) {
+            return reply(interaction, { content: '⚠️ המשתמש לא נמצא בשרת הזה.' });
+          }
+
+          const role =
+            interaction.guild.roles.cache.get(cfg.verifyRoleId) ||
+            (await interaction.guild.roles.fetch(cfg.verifyRoleId).catch(() => null));
+          if (!role) {
+            return reply(interaction, { content: config.verify.noRole });
+          }
+
+          try {
+            await member.roles.add(role, config.verify.auditReason);
+          } catch (err) {
+            console.error('[verify] re-verify role:', err.message);
+            return reply(interaction, { content: config.verify.failed });
+          }
+
+          if (cfg.unverifiedRoleId && member.roles.cache.has(cfg.unverifiedRoleId)) {
+            await member.roles
+              .remove(cfg.unverifiedRoleId, config.verify.auditReason)
+              .catch(() => {});
+          }
+
+          await saveProfile(gid, target).catch(() => {});
+          await logVerification(gid, target);
+
+          return reply(interaction, {
+            content: fill(config.verify.reverifyDone, { user: target.id }),
           });
         }
 
@@ -2856,6 +3255,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
+        case 'ticket-autoclose': {
+          if (!isSupport(interaction.member)) {
+            return reply(interaction, { content: config.rename.notMod });
+          }
+          const minutes = Math.max(
+            0,
+            Math.min(10080, interaction.options.getInteger('minutes', true))
+          );
+          const warn = Math.max(
+            1,
+            Math.min(60, interaction.options.getInteger('warn') || 5)
+          );
+          guildConfig.set(interaction.guild.id, {
+            ticketAutoCloseMinutes: minutes,
+            ticketAutoCloseWarnMinutes: warn,
+          });
+          return reply(interaction, {
+            content: fill(config.close.autoClose.set, { minutes, warn }),
+          });
+        }
+
         case 'ticket-close':
           await askCloseConfirmation(interaction);
           break;
@@ -2912,20 +3332,48 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    if (
+      interaction.isButton() &&
+      interaction.customId.startsWith('ticket_rate:')
+    ) {
+      await handleTicketRating(interaction);
+      return;
+    }
+
     if (!interaction.isButton()) return;
+
+    if (interaction.customId === 'ticket_stay') {
+      await handleTicketStay(interaction);
+      return;
+    }
 
     switch (interaction.customId) {
       case 'verify_button': {
         // Defer immediately — role + profile API calls can exceed Discord's 3s window.
         await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
-        const roleId = configFor(interaction.guild.id).verifyRoleId;
+        const cfg = configFor(interaction.guild.id);
+        const roleId = cfg.verifyRoleId;
         if (!roleId) {
           return interaction.editReply({ content: config.verify.noRole }).catch(() => {});
         }
 
+        const minAgeDays = Math.max(0, Number(cfg.verifyMinAgeDays || 0));
+        const accountAgeDays = Math.floor(
+          (Date.now() - interaction.user.createdTimestamp) / 86_400_000
+        );
+        if (minAgeDays && accountAgeDays < minAgeDays) {
+          return interaction.editReply({
+            content: fill(config.verify.tooNew, { days: minAgeDays }),
+          }).catch(() => {});
+        }
+
         if (interaction.member.roles.cache.has(roleId)) {
-          return interaction.editReply({ content: config.verify.already }).catch(() => {});
+          // Already verified: refresh the saved profile, still one click.
+          await saveProfile(interaction.guild.id, interaction.user).catch(() => {});
+          return interaction.editReply({
+            content: config.verify.alreadyRefreshed,
+          }).catch(() => {});
         }
 
         const role =
@@ -2936,7 +3384,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         try {
-          await interaction.member.roles.add(role, 'Verified via button');
+          await interaction.member.roles.add(role, config.verify.auditReason);
         } catch (err) {
           console.error('[verify]', err.message);
           return interaction.editReply({ content: config.verify.failed }).catch(() => {});
@@ -2947,7 +3395,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         const unverifiedId = configFor(interaction.guild.id).unverifiedRoleId;
         if (unverifiedId && interaction.member.roles.cache.has(unverifiedId)) {
           try {
-            await interaction.member.roles.remove(unverifiedId, 'Verified via button');
+            await interaction.member.roles.remove(unverifiedId, config.verify.auditReason);
             unverifiedNote = fill(config.verify.unverifiedRemoved, { unverified: unverifiedId });
           } catch (err) {
             console.error('[verify] unverified role:', err.message);
@@ -2959,6 +3407,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           console.error('[verify] profile:', err.message)
         );
 
+        await logVerification(interaction.guild.id, interaction.user);
         const success = fill(config.verify.success, { role: role.id, unverifiedNote });
         return interaction.editReply({ content: success }).catch(() => {});
       }

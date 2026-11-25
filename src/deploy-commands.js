@@ -64,6 +64,34 @@ const commands = [
     )
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('verify-minage')
+    .setDescription('הגדרת גיל חשבון מינימלי לאימות (0 = בלי הגבלה)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addIntegerOption((o) =>
+      o
+        .setName('days')
+        .setDescription('כמה ימים חייב החשבון להיות')
+        .setRequired(true)
+        .setMinValue(0)
+        .setMaxValue(3650)
+    )
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('verify-log')
+    .setDescription('הגדרת ערוץ יומן אימותים')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addChannelOption((o) => o.setName('channel').setDescription('הערוץ שבו יופיעו אימותים'))
+    .addBooleanOption((o) => o.setName('clear').setDescription('ביטול יומן האימות'))
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('reverify')
+    .setDescription('אימות מחדש של חבר ורענון הפרופיל שלו')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addUserOption((o) =>
+      o.setName('user').setDescription('החבר לאימות מחדש').setRequired(true)
+    )
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('broadcast')
     .setDescription('שליחת הודעה לכל חברי השרת בפרטי')
     .addStringOption((o) =>
@@ -191,6 +219,26 @@ const commands = [
   new SlashCommandBuilder()
     .setName('open-tickets')
     .setDescription('הצגת כל הטיקטים הפתוחים (צוות MOD בלבד)')
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('ticket-autoclose')
+    .setDescription('סגירה אוטומטית של טיקטים ללא פעילות')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addIntegerOption((o) =>
+      o
+        .setName('minutes')
+        .setDescription('דקות ללא פעילות עד סגירה (0 = כבוי)')
+        .setRequired(true)
+        .setMinValue(0)
+        .setMaxValue(10080)
+    )
+    .addIntegerOption((o) =>
+      o
+        .setName('warn')
+        .setDescription('כמה דקות לפני הסגירה לשלוח אזהרה (ברירת מחדל 5)')
+        .setMinValue(1)
+        .setMaxValue(60)
+    )
     .toJSON(),
   new SlashCommandBuilder()
     .setName('ticket-config')
@@ -437,7 +485,22 @@ const commands = [
     .addSubcommand((s) =>
       s
         .setName('reroll')
-        .setDescription('הגרלה מחדש מתוך המשתתפים')
+        .setDescription('הגרלה מחדש מתוך המשתתפים (בלי זוכים קודמים)')
+        .addStringOption((o) =>
+          o.setName('id').setDescription('מזהה ההודעה של ההגרלה').setRequired(true)
+        )
+        .addIntegerOption((o) =>
+          o
+            .setName('count')
+            .setDescription('כמה זוכים חדשים (ברירת מחדל 1)')
+            .setMinValue(1)
+            .setMaxValue(10)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('cancel')
+        .setDescription('ביטול הגרלה בלי לבחור זוכים')
         .addStringOption((o) =>
           o.setName('id').setDescription('מזהה ההודעה של ההגרלה').setRequired(true)
         )
