@@ -124,6 +124,30 @@ function brand(embed) {
   return embed.setFooter({ text: config.footer });
 }
 
+function ticketCategorySelect(guildId) {
+  const categories = categoriesFor(guildId);
+  const options = categories.slice(0, 25).map((c) =>
+    new StringSelectMenuOptionBuilder()
+      .setLabel(c.label)
+      .setValue(c.value)
+      .setDescription(c.description || 'פתיחת טיקט')
+  );
+  if (!options.length) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setLabel('תמיכה')
+        .setValue('support')
+        .setDescription('עזרה ותמיכה כללית')
+    );
+  }
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('ticket_create_select')
+      .setPlaceholder(config.selectPlaceholder || 'בחרו סוג פנייה כדי לפתוח טיקט')
+      .addOptions(options)
+  );
+}
+
 async function panel(guildId) {
   const categories = categoriesFor(guildId);
   const embed = new EmbedBuilder()
@@ -151,14 +175,11 @@ async function panel(guildId) {
     files = [new AttachmentBuilder(buffer, { name })];
   }
 
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('ticket_open')
-      .setLabel(config.buttonLabel)
-      .setEmoji(config.buttonEmoji)
-      .setStyle(ButtonStyle.Primary)
-  );
-  return { embeds: [brand(embed)], components: [row], files };
+  return {
+    embeds: [brand(embed)],
+    components: [ticketCategorySelect(guildId)],
+    files,
+  };
 }
 
 function ticketButtons(claimed = false) {
@@ -363,39 +384,32 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_category_select') {
+    if (
+      interaction.isStringSelectMenu() &&
+      (interaction.customId === 'ticket_create_select' ||
+        interaction.customId === 'ticket_category_select')
+    ) {
       const chosen = categoriesFor(interaction.guild.id).find(
         (c) => c.value === interaction.values[0]
       );
       if (!chosen) return reply(interaction, '⚠️ קטגוריה לא תקינה.');
-      await interaction.update({
-        content: '🎫 יוצר טיקט...',
-        embeds: [],
-        components: [],
-      });
+      // Keep the panel intact — only the ephemeral reply shows the result.
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
       return await openTicket(interaction, chosen);
     }
 
     if (!interaction.isButton()) return;
 
     if (interaction.customId === 'ticket_open') {
-      const categories = categoriesFor(interaction.guild.id);
-      if (categories.length === 1) return await openTicket(interaction, categories[0]);
-
-      const select = new StringSelectMenuBuilder()
-        .setCustomId('ticket_category_select')
-        .setPlaceholder('בחר סוג פנייה')
-        .addOptions(
-          categories.map((c) =>
-            new StringSelectMenuOptionBuilder()
-              .setLabel(c.label)
-              .setValue(c.value)
-              .setDescription(c.description || 'פתיחת טיקט')
-          )
-        );
-      return reply(interaction, 'בחרו סוג פנייה:', {
-        components: [new ActionRowBuilder().addComponents(select)],
-      });
+      // Old button panels are upgraded in place to the dropdown layout.
+      try {
+        await interaction.update({
+          components: [ticketCategorySelect(interaction.guild.id)],
+        });
+      } catch {
+        return reply(interaction, '⚠️ נסו שוב.');
+      }
+      return;
     }
 
     if (interaction.customId === 'ticket_claim') {

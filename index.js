@@ -312,6 +312,7 @@ async function refreshPanelEmbeds(guild, guildCfg) {
     (ch) => ch.type === ChannelType.GuildText
   );
   const visual = await panelVisual('ticket', guildCfg);
+  const components = [ticketCategorySelect(guildCfg)];
 
   let updated = 0;
   for (const channel of channels) {
@@ -323,7 +324,9 @@ async function refreshPanelEmbeds(guild, guildCfg) {
         (m) =>
           m.author.id === client.user.id &&
           m.components.some((row) =>
-            row.components.some((c) => c.customId === 'ticket_create')
+            row.components.some(
+              (c) => c.customId === 'ticket_create' || c.customId === 'ticket_create_select'
+            )
           )
       );
 
@@ -335,7 +338,7 @@ async function refreshPanelEmbeds(guild, guildCfg) {
           embed.setDescription(fill(guildCfg.panelDescription, dateVars()));
         }
         embed.setImage(visual.imageUrl);
-        await panel.edit({ embeds: [embed], files: visual.files });
+        await panel.edit({ embeds: [embed], components, files: visual.files });
         updated++;
       }
     } catch (err) {
@@ -418,6 +421,33 @@ function ticketButtons({ claimed = false } = {}) {
       .setStyle(ButtonStyle.Danger)
   );
   return row;
+}
+
+/**
+ * The ticket panel itself is a dropdown: pick a category and the ticket opens.
+ */
+function ticketCategorySelect(guildCfg) {
+  const categories = guildCfg.categories || config.ticketCategories;
+  const options = categories.slice(0, 25).map((c) =>
+    new StringSelectMenuOptionBuilder()
+      .setLabel(c.label)
+      .setValue(c.value)
+      .setDescription(c.description || 'בחרו סוג פנייה')
+  );
+  if (!options.length) {
+    options.push(
+      new StringSelectMenuOptionBuilder()
+        .setLabel('תמיכה')
+        .setValue('support')
+        .setDescription('עזרה ותמיכה כללית')
+    );
+  }
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId('ticket_create_select')
+      .setPlaceholder(config.panel.selectPlaceholder || 'בחרו סוג פנייה')
+      .addOptions(options)
+  );
 }
 
 /**
@@ -3110,17 +3140,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           embed.setImage(visual.imageUrl);
           brandEmbed(embed);
 
-          const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-              .setCustomId('ticket_create')
-              .setLabel(config.panel.buttonLabel)
-              .setEmoji(config.panel.buttonEmoji)
-              .setStyle(ButtonStyle.Primary)
-          );
-
           await interaction.channel.send({
             embeds: [embed],
-            components: [row],
+            components: [ticketCategorySelect(guildCfg)],
             files: visual.files,
           });
           await reply(interaction, {
@@ -3458,18 +3480,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_category_select') {
+    if (
+      interaction.isStringSelectMenu() &&
+      (interaction.customId === 'ticket_create_select' ||
+        interaction.customId === 'ticket_category_select')
+    ) {
       const chosen = configFor(interaction.guild.id).categories.find(
         (c) => c.value === interaction.values[0]
       );
       if (!chosen) {
         return reply(interaction, { content: '⚠️ קטגוריה לא תקינה.' });
       }
-      await interaction.update({
-        content: '🎫 יוצר טיקט...',
-        embeds: [],
-        components: [],
-      });
+      // Keep the panel intact — only the ephemeral reply shows the result.
+      await interaction.deferReply({ ephemeral: true }).catch(() => {});
       await createTicket(interaction, chosen);
       return;
     }
@@ -3572,26 +3595,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
 
       case 'ticket_create': {
-        const options = configFor(interaction.guild.id).categories.map((c) =>
-          new StringSelectMenuOptionBuilder()
-            .setLabel(c.label)
-            .setValue(c.value)
-            .setDescription(c.description || 'בדיקה')
-        );
-
-        if (!options.length) {
-          return reply(interaction, { content: '⚠️ לא הוגדרו קטגוריות לטיקטים.' });
+        // Old button panels are upgraded in place to the dropdown layout.
+        try {
+          await interaction.update({
+            components: [ticketCategorySelect(configFor(interaction.guild.id))],
+          });
+        } catch {
+          return reply(interaction, { content: '⚠️ נסו שוב.' });
         }
-
-        const select = new StringSelectMenuBuilder()
-          .setCustomId('ticket_category_select')
-          .setPlaceholder('בחר קטגוריה')
-          .addOptions(options);
-
-        return reply(interaction, {
-          content: 'בחר קטגוריה לטיקט:',
-          components: [new ActionRowBuilder().addComponents(select)],
-        });
+        return;
       }
       case 'ticket_claim':
         await claimTicket(interaction);

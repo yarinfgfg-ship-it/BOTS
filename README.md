@@ -4,7 +4,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 
 ## ✨ Features
 
-- 🎫 **Tickets** — panel button, private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
+- 🎫 **Tickets** — panel **category dropdown** (pick a type → ticket opens instantly), private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
 - ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
 - 👋 **Welcome** — Hebrew join message with the member's large avatar + member count
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`

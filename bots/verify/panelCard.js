@@ -391,7 +391,7 @@ async function buildTicketPanelCard({ title, description, categories = [] }) {
     items: categories.slice(0, 4),
     accent: '#7c8cff',
     eyebrow: 'TICKET SYSTEM',
-    caption: 'לחצו על הכפתור למטה כדי לפתוח טיקט',
+    caption: 'בחרו סוג פנייה מהרשימה למטה כדי לפתוח טיקט',
   });
 }
 
