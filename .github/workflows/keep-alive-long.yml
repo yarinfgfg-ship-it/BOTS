@@ -1,0 +1,23 @@
+name: Keep Render bot awake (long runner)
+
+# GitHub's short cron events can be delayed for hours. This job stays alive for
+# ~5.5 hours and pings Render every 4 minutes, so the free service does not
+# idle out. A second job starts 3 hours later to overlap any scheduling delay.
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
+jobs:
+  keep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    steps:
+      - name: Ping Render every 4 minutes
+        run: |
+          for i in $(seq 1 85); do
+            echo "$(date -u +%FT%TZ) ping $i"
+            curl -fsS --max-time 60 'https://bots-xinz.onrender.com/health' || true
+            echo
+            sleep 240
+          done
