@@ -231,9 +231,8 @@ function welcomeMessage(options) {
   });
   return {
     content: `<@${options.user.id}>`, // actual Discord ping
-    // Discord markdown headings render larger; embed descriptions support them.
-    title: '',
-    description: greeting ? `# ${greeting}\n\n${pretty.join('\n')}` : pretty.join('\n'),
+    title: greeting,
+    description: pretty.join('\n'),
   };
 }
 
@@ -244,7 +243,8 @@ function buildWelcomeEmbed(options, message) {
   if (message.title) embed.setTitle(message.title);
   if (message.description) embed.setDescription(message.description);
   const image = banner.url || avatar;
-  if (image) embed.setThumbnail(image);
+  // Full-size image makes the whole message card bigger. Only one image is used.
+  if (image) embed.setImage(image);
   return { embed, files: banner.files };
 }
 
