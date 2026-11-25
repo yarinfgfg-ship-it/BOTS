@@ -27,6 +27,10 @@ module.exports = {
       .split(',')
       .map((id) => id.trim())
       .filter(Boolean),
+    adminRoles: (process.env.ADMIN_ROLE_IDS || '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean),
   },
 
   // ---------------------------------------------------------------------

@@ -5,6 +5,7 @@ One bot with everything: tickets, one-click verify, join role, welcome messages,
 ## ✨ Features
 
 - 🎫 **Tickets** — panel **category dropdown** (pick a type → ticket opens instantly), private channels, claim/rename/close, inactivity auto-close with warning, post-close star rating, per-server settings
+- 🔐 **Ticket admins** — `/ticket-admin list/close/rename` to manage any ticket from anywhere, plus `/ticket-admin-role` to configure which roles can do it
 - ✅ **Verify** — one click grants the verified role and removes the "unverified" join role (no OAuth/site), optional minimum account age, audit log, `/reverify`
 - 👋 **Welcome** — Hebrew join message with the member's large avatar + member count
 - 🛠️ **Owner tools** — `/dm`, `/alert`, `/join-server`, `/auth-*`
@@ -41,7 +42,7 @@ Render Free is also possible but it sleeps after 15 minutes idle, so it needs an
 Short version:
 1. Push this repo to GitHub (already done here).
 2. Render → **New Web Service** → this repo → **Free** → `/health`.
-3. Add env vars (`DISCORD_TOKEN`, `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`, `BOT_OWNER_IDS`, `ENABLE_MEMBERS_INTENT=true`, `AUTO_DEPLOY_COMMANDS=true`, `GUILDS_JSON`).
+3. Add env vars (`DISCORD_TOKEN`, `CLIENT_ID`, `CLIENT_SECRET`, `REDIRECT_URI`, `BOT_OWNER_IDS`, `ENABLE_MEMBERS_INTENT=true`, `AUTO_DEPLOY_COMMANDS=true`, `GUILDS_JSON`, and optionally `ADMIN_ROLE_IDS`).
 4. Discord Portal → OAuth2 Redirects → `https://bots-xinz.onrender.com/callback`.
 5. UptimeRobot → ping `/health` every 5 minutes so Render doesn't sleep.
 
@@ -67,6 +68,10 @@ render.yaml           Render free service config
 | `/ticket-setup` | Post the ticket panel |
 | `/ticket-autoclose minutes:60 warn:5` | Auto-close idle tickets (0 = off) |
 | `/ticket-category add/list/remove` | Manage ticket categories; remove by number, name or value |
+| `/ticket-admin list` | List every open ticket with status, creator and channel name |
+| `/ticket-admin close ticket:#channel` | Close any ticket from outside its channel |
+| `/ticket-admin rename ticket:#channel name:...` | Rename any ticket channel |
+| `/ticket-admin-role add/remove/list role:@role` | Configure admin roles that can use `/ticket-admin` |
 | `/verify-setup` | Post the verify panel |
 | `/verify-role role:@role` | Choose the verified role |
 | `/verify-minage days:7` | Minimum account age to verify (0 = off) |
@@ -78,3 +83,5 @@ render.yaml           Render free service config
 | `/test` | Preview the welcome embed |
 | `/beautify text:...` | Beautify text |
 | `/dm`, `/alert`, `/join-server` | Owner-only tools |
+
+`/ticket-admin` is shown to members with **Manage Server**; the configured admin roles are checked again in code. Give the admin role Manage Server if you want it to appear in the slash-command menu for those members.

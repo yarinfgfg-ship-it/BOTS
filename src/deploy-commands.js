@@ -1,6 +1,12 @@
 require('dotenv').config();
 
-const { REST, Routes, SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const {
+  REST,
+  Routes,
+  SlashCommandBuilder,
+  PermissionFlagsBits,
+  ChannelType,
+} = require('discord.js');
 
 const TIME_CHOICES = [
   { name: '5 דקות', value: '5' },
@@ -294,6 +300,67 @@ const commands = [
     .addSubcommand((s) => s.setName('list').setDescription('רשימת הרולים'))
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('ticket-admin')
+    .setDescription('ניהול טיקטים: רשימה, סגירה ושינוי שם (אדמינים)')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) =>
+      s.setName('list').setDescription('הצגת כל הטיקטים הפתוחים בשרת')
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('close')
+        .setDescription('סגירת טיקט לפי ערוץ')
+        .addChannelOption((o) =>
+          o
+            .setName('ticket')
+            .setDescription('ערוץ הטיקט לסגירה')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('rename')
+        .setDescription('שינוי שם של ערוץ טיקט')
+        .addChannelOption((o) =>
+          o
+            .setName('ticket')
+            .setDescription('ערוץ הטיקט לשינוי')
+            .addChannelTypes(ChannelType.GuildText)
+            .setRequired(true)
+        )
+        .addStringOption((o) =>
+          o
+            .setName('name')
+            .setDescription('השם החדש')
+            .setRequired(true)
+            .setMaxLength(40)
+        )
+    )
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName('ticket-admin-role')
+    .setDescription('ניהול רולי אדמין שיכולים לצפות ולנהל טיקטים')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) =>
+      s
+        .setName('add')
+        .setDescription('הוספת רול אדמין')
+        .addRoleOption((o) =>
+          o.setName('role').setDescription('הרול להוספה').setRequired(true)
+        )
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('remove')
+        .setDescription('הסרת רול אדמין')
+        .addRoleOption((o) =>
+          o.setName('role').setDescription('הרול להסרה').setRequired(true)
+        )
+    )
+    .addSubcommand((s) => s.setName('list').setDescription('רשימת רולי האדמין'))
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('ticket-message')
     .setDescription('עריכת הודעת הטיקט והודעת הברכה לשרת הזה')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
@@ -534,17 +601,23 @@ const commands = [
 
 // דיסקורד לא מאפשר לבוטים לשנות הרשאות פקודות דרך ה־API, אז מסתירים את
 // פקודות הצוות כברירת מחדל ('0') ואוכפים בעלות בקוד. פקודות ציבור נשארות.
+// פקודות האדמין נשארות עם ManageGuild כדי שאדמינים יראו אותן, והגישה נבדקת
+// גם מול רולי האדמין בתוך הקוד.
+const ROLE_GATED_COMMANDS = new Set(['ticket-admin', 'ticket-admin-role']);
+const isStaffCommand = (c) =>
+  Boolean(c.default_member_permissions) &&
+  c.default_member_permissions !== '0' &&
+  !ROLE_GATED_COMMANDS.has(c.name);
+
 const fs = require('fs');
 const path = require('path');
-const staffCommandNames = commands
-  .filter((c) => c.default_member_permissions && c.default_member_permissions !== '0')
-  .map((c) => c.name);
+const staffCommandNames = commands.filter(isStaffCommand).map((c) => c.name);
 fs.writeFileSync(
   path.join(__dirname, 'staff-commands.json'),
   JSON.stringify(staffCommandNames, null, 2) + '\n'
 );
 for (const cmd of commands) {
-  if (cmd.default_member_permissions && cmd.default_member_permissions !== '0') {
+  if (isStaffCommand(cmd)) {
     cmd.default_member_permissions = '0';
   }
 }

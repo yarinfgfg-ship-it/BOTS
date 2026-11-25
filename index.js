@@ -68,6 +68,9 @@ try {
   STAFF_COMMANDS = [];
 }
 
+// Visible to server admins / configured admin roles, gated by role in code.
+const ADMIN_ONLY_COMMANDS = ['ticket-admin', 'ticket-admin-role'];
+
 function isOwnerUser(interaction) {
   return (
     OWNER_IDS.includes(interaction.user.id) ||
@@ -79,6 +82,7 @@ function isOwnerUser(interaction) {
 function configFor(guildId) {
   return guildConfig.get(guildId, {
     supportRoles: config.ids.supportRoles,
+    adminRoles: config.ids.adminRoles,
     logChannel: config.ids.logChannel,
     categories: config.ticketCategories,
   });
@@ -721,7 +725,16 @@ function isTicketChannel(channel) {
 function isSupport(member) {
   if (!member) return false;
   if (member.permissions.has(PermissionFlagsBits.ManageChannels)) return true;
-  return configFor(member.guild.id).supportRoles.some((id) => member.roles.cache.has(id));
+  const cfg = configFor(member.guild.id);
+  const roles = [...new Set([...(cfg.supportRoles || []), ...(cfg.adminRoles || [])])];
+  return roles.some((id) => member.roles.cache.has(id));
+}
+
+// Admins can list, close and rename any ticket, even outside its channel.
+function isTicketAdmin(member) {
+  if (!member) return false;
+  if (member.permissions.has(PermissionFlagsBits.ManageGuild)) return true;
+  return (configFor(member.guild.id).adminRoles || []).some((id) => member.roles.cache.has(id));
 }
 
 async function reply(interaction, options) {
@@ -865,8 +878,9 @@ async function createTicket(interaction, ticketCategory) {
   ];
 
   const guildCfg = configFor(guild.id);
+  const staffRoles = [...new Set([...(guildCfg.supportRoles || []), ...(guildCfg.adminRoles || [])])];
 
-  for (const roleId of guildCfg.supportRoles) {
+  for (const roleId of staffRoles) {
     if (guild.roles.cache.has(roleId)) {
       overwrites.push({
         id: roleId,
@@ -1013,15 +1027,18 @@ async function openRenameModal(interaction) {
   await interaction.showModal(modal);
 }
 
-async function applyRename(interaction) {
-  const raw = interaction.fields.getTextInputValue('ticket_new_name') || '';
-  const number = ticketNumber(interaction.channel);
-  const clean = raw
+function sanitizeTicketName(raw) {
+  return String(raw || '')
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '')
     .slice(0, 40) || 'ticket';
+}
+
+async function applyRename(interaction) {
+  const clean = sanitizeTicketName(interaction.fields.getTextInputValue('ticket_new_name'));
+  const number = ticketNumber(interaction.channel);
 
   await interaction.channel.setName(`ticket-${number}-${clean}`, {
     reason: `Renamed by ${interaction.user.tag}`,
@@ -2362,7 +2379,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
       // פקודות צוות: רק בעלי הבוט / בעלי השרת. דיסקורד לא מאפשר בוטים
       // לשנות הרשאות פקודות, אז האכיפה כאן בנוסף ל־default_member_permissions=0.
-      if (STAFF_COMMANDS.includes(interaction.commandName) && !isOwnerUser(interaction)) {
+      const roleAllowed =
+        ADMIN_ONLY_COMMANDS.includes(interaction.commandName) && isTicketAdmin(interaction.member);
+      if (
+        STAFF_COMMANDS.includes(interaction.commandName) &&
+        !isOwnerUser(interaction) &&
+        !roleAllowed
+      ) {
         return reply(interaction, {
           content: '⚠️ רק בעלי הבוט / בעלי השרת יכולים להשתמש בפקודה הזאת.',
           ephemeral: true,
@@ -3219,6 +3242,89 @@ client.on(Events.InteractionCreate, async (interaction) => {
             content: current.length
               ? `**רולי צוות בשרת הזה (${current.length}):**\n${current.map((id) => `<@&${id}>`).join('\n')}`
               : 'אין עדיין רולי צוות. הוסיפו עם `/ticket-roles add`.',
+          });
+        }
+
+        case 'ticket-admin': {
+          if (!isTicketAdmin(interaction.member)) {
+            return reply(interaction, {
+              content: '⚠️ הפקודה הזו זמינה רק לאדמינים. הגדירו רול עם `/ticket-admin-role add`.',
+            });
+          }
+
+          const sub = interaction.options.getSubcommand();
+          const tickets = [...interaction.guild.channels.cache.values()].filter(isTicketChannel);
+
+          if (sub === 'list') {
+            const lines = tickets.map((ch) => {
+              const meta = getMeta(ch);
+              return (
+                `<#${ch.id}> — ${meta.status || 'open'}` +
+                (meta.creator ? ` — <@${meta.creator}>` : '') +
+                ` — \`${ch.name}\``
+              );
+            });
+            return reply(interaction, {
+              content: lines.length
+                ? `**טיקטים בשרת (${lines.length}):**\n${lines.slice(0, 20).join('\n')}`
+                : 'אין טיקטים פתוחים כרגע.',
+            });
+          }
+
+          const target = interaction.options.getChannel('ticket');
+          if (
+            !target ||
+            target.guild?.id !== interaction.guild.id ||
+            !isTicketChannel(target)
+          ) {
+            return reply(interaction, { content: '⚠️ בחרו ערוץ טיקט תקין בשרת הזה.' });
+          }
+
+          if (sub === 'close') {
+            await performTicketClose(target, {
+              userId: interaction.user.id,
+              tag: interaction.user.tag,
+            });
+            return reply(interaction, { content: `✅ הטיקט נסגר: <#${target.id}>.` });
+          }
+
+          const clean = sanitizeTicketName(interaction.options.getString('name'));
+          const name = `ticket-${ticketNumber(target)}-${clean}`;
+          await target.setName(name, { reason: `Renamed by ${interaction.user.tag}` });
+          return reply(interaction, { content: `✅ שם הטיקט עודכן ל־\`${name}\`.` });
+        }
+
+        case 'ticket-admin-role': {
+          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
+            return reply(interaction, { content: '⚠️ נדרשת הרשאת ניהול שרת.' });
+          }
+
+          const gid = interaction.guild.id;
+          const current = [...(configFor(gid).adminRoles || [])];
+          const sub = interaction.options.getSubcommand();
+
+          if (sub === 'add') {
+            const role = interaction.options.getRole('role');
+            if (!current.includes(role.id)) current.push(role.id);
+            guildConfig.set(gid, { adminRoles: current });
+            return reply(interaction, {
+              content: `✅ <@&${role.id}> נוסף כרול אדמין. סה״כ ${current.length}.`,
+            });
+          }
+
+          if (sub === 'remove') {
+            const role = interaction.options.getRole('role');
+            const next = current.filter((id) => id !== role.id);
+            guildConfig.set(gid, { adminRoles: next });
+            return reply(interaction, {
+              content: `✅ <@&${role.id}> הוסר. נותרו ${next.length} רולים.`,
+            });
+          }
+
+          return reply(interaction, {
+            content: current.length
+              ? `**רולי אדמין לטיקטים (${current.length}):**\n${current.map((id) => `<@&${id}>`).join('\n')}`
+              : 'אין רולי אדמין. הוסיפו עם `/ticket-admin-role add`.',
           });
         }
 
