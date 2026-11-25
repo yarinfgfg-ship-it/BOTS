@@ -2654,13 +2654,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
             guild: interaction.guild,
             displayName: interaction.member?.displayName,
           };
+          await interaction.deferReply({ ephemeral: true });
           const previewMessage = welcomeMessage(previewOptions);
           const previewCard = await buildWelcomeEmbed(previewOptions, previewMessage);
-          return interaction.reply({
+          return interaction.editReply({
             content: previewMessage.content,
             embeds: [previewCard.embed],
             files: previewCard.files,
-            ephemeral: true,
           });
         }
 
@@ -2690,14 +2690,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
             guild: interaction.guild,
             displayName: guildMember?.displayName || user.globalName || user.username,
           };
+          await interaction.deferReply({ ephemeral: false });
           const testMessage = welcomeMessage(testOptions);
           const testCard = await buildWelcomeEmbed(testOptions, testMessage);
-          return interaction.reply({
+          return interaction.editReply({
             content: testMessage.content,
             allowedMentions: { parse: ['users'] },
             embeds: [testCard.embed],
             files: testCard.files,
-            ephemeral: false,
           });
         }
 
