@@ -227,9 +227,16 @@ function welcomeLines(guildId, user, memberCount, guild, displayName) {
     count: memberCount,
     date: welcomeStamp(),
   };
-  return ['greeting', 'hello', 'line1', 'line2', 'footer']
+  const lines = ['greeting', 'hello', 'line1', 'line2', 'footer']
     .map((key) => fill(text[key] ?? config.welcomeCard[key], vars).trim())
     .filter(Boolean);
+
+  // `שלום @Name` in the message. The card draws the same name in its own pill,
+  // so only add it here when the editable line doesn't already contain it.
+  if (lines[1] && !lines[1].includes(vars.user)) {
+    lines[1] = `${lines[1]} ${vars.user}`;
+  }
+  return lines;
 }
 
 function buildWelcomeEmbed(options) {
@@ -240,10 +247,9 @@ function buildWelcomeEmbed(options) {
     options.guild,
     options.displayName
   );
-  const [first, ...rest] = lines;
   return new EmbedBuilder()
     .setColor(config.colors.welcome)
-    .setDescription([`**${first}**`, ...rest].join('\n'));
+    .setDescription(lines.join('\n'));
 }
 
 // Turns plain text into a normal Discord message — like a person typed it.

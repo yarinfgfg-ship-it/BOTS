@@ -279,7 +279,9 @@ module.exports = {
     hello: 'שלום',
     line1: 'שמחים שהצטרפת ל־{guild}',
     line2: 'אתה החבר מספר {count} בקהילה',
-    footer: '{guild} • {date}',
+    // Empty by default — the welcome message is exactly the four lines above.
+    // Set it with /welcome-card text footer:... if you want a bottom line.
+    footer: '',
   },
 
   // ---------------------------------------------------------------------

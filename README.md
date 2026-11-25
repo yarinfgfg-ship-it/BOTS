@@ -80,7 +80,7 @@ render.yaml           Render free service config
 | `/reverify user:@member` | Re-verify a member and refresh the profile |
 | `/join-role role:@role` | Role given on join, removed on verify |
 | `/welcome-setup` | Set welcome channel |
-| `/welcome-card text ...` | Edit all card text; supports `{user}`, `{guild}`, `{count}`, `{date}`; `clear: true` resets |
+| `/welcome-card text ...` | Edit greeting / hello / line1 / line2 / optional footer; supports `{user}`, `{guild}`, `{count}`, `{date}`; `clear: true` resets |
 | `/welcome-card banner upload image:...` | Upload the big banner image for this server |
 | `/welcome-card banner url link:...` | Use an image URL as the banner |
 | `/welcome-card banner remove` | Remove the banner (member photo is used again) |
