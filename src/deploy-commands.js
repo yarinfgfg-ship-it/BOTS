@@ -743,13 +743,22 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
     console.log('✅ Slash commands registered globally.');
 
-    // Remove old per-guild copies left by earlier deploys, but keep the
-    // status command as a guild command so it appears instantly. Global
-    // commands can take up to an hour to propagate to Discord clients.
+    // Keep these commands as guild commands so schema changes appear
+    // instantly. Global commands can take up to an hour to propagate and
+    // clients otherwise report "This command is outdated".
     const instantCommands = commands.filter((c) =>
-      ['status-setup', 'status-banner', 'anti-nuke'].includes(c.name)
+      ['status-setup', 'status-banner', 'anti-nuke', 'staff-roles'].includes(c.name)
     );
-    const oldGuilds = [GUILD_ID, ...(INSTANT_GUILD_IDS || '').split(',')]
+    const fallbackGuildIds = [
+      '1554232173035528223',
+      '1559952474276630559',
+      '1572351677074509934',
+    ];
+    const oldGuilds = [
+      GUILD_ID,
+      ...fallbackGuildIds,
+      ...(INSTANT_GUILD_IDS || '').split(','),
+    ]
       .map((id) => (id || '').trim())
       .filter(Boolean);
     for (const gid of [...new Set(oldGuilds)]) {
