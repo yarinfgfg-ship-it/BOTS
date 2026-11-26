@@ -717,13 +717,18 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
     console.log('✅ Slash commands registered globally.');
 
-    // Remove old per-guild copies left by earlier deploys.
+    // Remove old per-guild copies left by earlier deploys, but keep the
+    // status command as a guild command so it appears instantly. Global
+    // commands can take up to an hour to propagate to Discord clients.
+    const instantCommands = commands.filter((c) => c.name === 'status-setup');
     const oldGuilds = [GUILD_ID, ...(INSTANT_GUILD_IDS || '').split(',')]
       .map((id) => (id || '').trim())
       .filter(Boolean);
     for (const gid of [...new Set(oldGuilds)]) {
-      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, gid), { body: [] });
-      console.log(`🧹 Cleared duplicate guild commands in ${gid}.`);
+      await rest.put(Routes.applicationGuildCommands(CLIENT_ID, gid), {
+        body: instantCommands,
+      });
+      console.log(`🧹 Synced instant guild commands in ${gid}.`);
     }
   } catch (error) {
     console.error('❌ Failed to register commands:', error);
