@@ -3385,8 +3385,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         case 'broadcast': {
-          if (!isSupport(interaction.member)) {
-            return reply(interaction, { content: config.broadcast.notAllowed });
+          // Strict: only the private owner may broadcast. Server ownership and
+          // admin/support roles are deliberately ignored.
+          if (!isPrivateOwner(interaction)) {
+            return reply(interaction, { content: '⛔ פקודה זו זמינה רק לי.' });
           }
           const text = interaction.options.getString('message');
           const members = [...interaction.guild.members.cache.values()].filter(
