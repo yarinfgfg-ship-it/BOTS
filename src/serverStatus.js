@@ -1,5 +1,10 @@
 const fs = require('fs');
-const { EmbedBuilder } = require('discord.js');
+const {
+  EmbedBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+} = require('discord.js');
 const { storePath } = require('./store');
 
 // The FiveM join code the bot reports by default.
@@ -178,9 +183,20 @@ async function getServerStatus(input = DEFAULT_STATUS_CODE) {
   };
 }
 
-function buildStatusEmbed(status) {
+function joinLink(code) {
+  return `https://cfx.re/join/${encodeURIComponent(code)}`;
+}
+
+function playerBar(players, maxPlayers) {
+  if (!maxPlayers) return '';
+  const total = 10;
+  const filled = Math.max(0, Math.min(total, Math.round((players / maxPlayers) * total)));
+  return `\n\`[${'█'.repeat(filled)}${'░'.repeat(total - filled)}]\``;
+}
+
+function buildStatusEmbed(status, bannerUrl = '') {
   const dash = '—';
-  const join = `https://cfx.re/join/${encodeURIComponent(status.code)}`;
+  const join = joinLink(status.code);
   const access = status.online
     ? status.adminOnly === null
       ? 'לא ידוע'
@@ -188,25 +204,28 @@ function buildStatusEmbed(status) {
         ? 'רק מורשים / אדמין'
         : 'לא — פתוח לכולם'
     : dash;
+  const players = status.online
+    ? `${status.players} / ${status.maxPlayers || dash}` +
+      playerBar(status.players, status.maxPlayers)
+    : dash;
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setColor(status.online ? '#2ECC71' : '#E74C3C')
     .setTitle(status.online ? '🟢 השרת אונליין' : '🔴 השרת אופליין')
     .setDescription(
-      `**${status.name}**\n[cfx.re/join/${status.code}](${join})` +
-        (status.online ? '' : '\nהשרת לא זוהה כרגע בשרתוני FiveM.')
+      [
+        `**${status.name}**`,
+        `🔗 [cfx.re/join/${status.code}](${join})`,
+        status.online ? '' : '⚠️ השרת לא זוהה כרגע בשרתוני FiveM.',
+      ]
+        .filter(Boolean)
+        .join('\n')
     )
     .setThumbnail(
       `https://frontend.cfx-services.net/api/servers/icon/${encodeURIComponent(status.code)}/0.png`
     )
     .addFields(
-      {
-        name: '👥 שחקנים',
-        value: status.online
-          ? `${status.players} / ${status.maxPlayers || dash}`
-          : dash,
-        inline: true,
-      },
+      { name: '👥 שחקנים', value: players, inline: false },
       { name: '🔐 גישה', value: access, inline: true },
       {
         name: '⏱️ זמן פעילות',
@@ -218,11 +237,30 @@ function buildStatusEmbed(status) {
         value: status.lastSeenMs
           ? `<t:${Math.floor(status.lastSeenMs / 1000)}:R>`
           : dash,
-        inline: true,
+        inline: false,
       }
     )
     .setFooter({ text: `בדיקת סטטוס • ${status.code}` })
     .setTimestamp();
+
+  if (/^https?:\/\/\S+$/i.test(String(bannerUrl || '').trim())) {
+    embed.setImage(String(bannerUrl).trim());
+  }
+  return embed;
+}
+
+function buildStatusComponents(code) {
+  const join = joinLink(code);
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId('status_copy_link')
+      .setLabel('📋 העתק קישור')
+      .setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder()
+      .setLabel('🚀 הצטרפות לשרת')
+      .setStyle(ButtonStyle.Link)
+      .setURL(join)
+  );
 }
 
 module.exports = {
@@ -231,4 +269,6 @@ module.exports = {
   formatUptime,
   getServerStatus,
   buildStatusEmbed,
+  buildStatusComponents,
+  joinLink,
 };

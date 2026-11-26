@@ -649,6 +649,17 @@ const commands = [
     .setDescription('סטטוס שרת FiveM: אונליין, שחקנים, גישה וזמן פעילות')
     .toJSON(),
   new SlashCommandBuilder()
+    .setName('status-banner')
+    .setDescription('הוספה או הסרה של באנר לכרטיס הסטטוס')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addStringOption((o) =>
+      o
+        .setName('url')
+        .setDescription('קישור לתמונת באנר (בלי קישור = הסרה)')
+        .setRequired(false)
+    )
+    .toJSON(),
+  new SlashCommandBuilder()
     .setName('anti-nuke')
     .setDescription('הגנה מפני מחיקה המונית של ערוצים, תפקידים והרשאות')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
@@ -728,7 +739,7 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     // status command as a guild command so it appears instantly. Global
     // commands can take up to an hour to propagate to Discord clients.
     const instantCommands = commands.filter((c) =>
-      ['status-setup', 'anti-nuke'].includes(c.name)
+      ['status-setup', 'status-banner', 'anti-nuke'].includes(c.name)
     );
     const oldGuilds = [GUILD_ID, ...(INSTANT_GUILD_IDS || '').split(',')]
       .map((id) => (id || '').trim())

@@ -44,6 +44,8 @@ const {
   DEFAULT_STATUS_CODE,
   getServerStatus,
   buildStatusEmbed,
+  buildStatusComponents,
+  joinLink,
 } = require('./src/serverStatus');
 const antiNuke = require('./src/antiNuke');
 const {
@@ -113,7 +115,7 @@ function configFor(guildId) {
 const statusSignatures = new Map();
 const statusDiscoveryDone = new Set();
 
-function statusSignature(status) {
+function statusSignature(status, bannerUrl = '') {
   return JSON.stringify([
     status.online,
     status.name,
@@ -122,6 +124,7 @@ function statusSignature(status) {
     status.adminOnly,
     Math.floor((status.uptimeMs || 0) / 60_000),
     status.lastSeenMs ? Math.floor(status.lastSeenMs / 60_000) : null,
+    bannerUrl || '',
   ]);
 }
 
@@ -185,12 +188,15 @@ async function refreshStatusCard(guild, force = false) {
 
   const cfg = configFor(guild.id);
   const status = await getServerStatus(cfg.statusCode || DEFAULT_STATUS_CODE);
-  const signature = statusSignature(status);
+  const signature = statusSignature(status, cfg.statusBannerUrl);
   if (!force && statusSignatures.get(stored.message.id) === signature) return false;
 
-  const embed = buildStatusEmbed(status);
+  const embed = buildStatusEmbed(status, cfg.statusBannerUrl);
   try {
-    await stored.message.edit({ embeds: [embed] });
+    await stored.message.edit({
+      embeds: [embed],
+      components: buildStatusComponents(status.code),
+    });
     statusSignatures.set(stored.message.id, signature);
     return true;
   } catch (err) {
@@ -2620,12 +2626,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
             // Interaction may already be acknowledged.
           }
           const status = await getServerStatus(DEFAULT_STATUS_CODE);
-          const embed = buildStatusEmbed(status);
+          const bannerUrl = interaction.guild
+            ? configFor(interaction.guild.id).statusBannerUrl
+            : '';
+          const embed = buildStatusEmbed(status, bannerUrl);
+          const components = buildStatusComponents(status.code);
           let sent = null;
           try {
-            sent = await interaction.editReply({ embeds: [embed] });
+            sent = await interaction.editReply({ embeds: [embed], components });
           } catch {
-            sent = await interaction.reply({ embeds: [embed] }).catch(() => null);
+            sent = await interaction.reply({ embeds: [embed], components }).catch(() => null);
           }
           if (sent?.id && interaction.guild) {
             guildConfig.set(interaction.guild.id, {
@@ -2633,10 +2643,51 @@ client.on(Events.InteractionCreate, async (interaction) => {
               statusMessageId: sent.id,
               statusCode: DEFAULT_STATUS_CODE,
             });
-            statusSignatures.set(sent.id, statusSignature(status));
+            statusSignatures.set(sent.id, statusSignature(status, bannerUrl));
             statusDiscoveryDone.delete(interaction.guild.id);
           }
           return;
+        }
+
+        case 'status-banner': {
+          if (!interaction.guild) {
+            return reply(interaction, { content: '⚠️ אפשר להשתמש בזה רק בשרת.' });
+          }
+          if (
+            !isOwnerUser(interaction) &&
+            !interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)
+          ) {
+            return reply(interaction, {
+              content: '⚠️ נדרשת הרשאת ניהול שרת.',
+              ephemeral: true,
+            });
+          }
+
+          const gid = interaction.guild.id;
+          const raw = interaction.options.getString('url');
+          if (!raw) {
+            guildConfig.set(gid, { statusBannerUrl: null });
+            const updated = await refreshStatusCard(interaction.guild, true);
+            return reply(interaction, {
+              content: updated
+                ? '✅ הבאנר הוסר והכרטיס עודכן.'
+                : '✅ הבאנר הוסר. הריצו `/status-setup` כדי ליצור כרטיס חדש.',
+            });
+          }
+
+          const url = raw.trim();
+          if (!/^https?:\/\/\S+$/i.test(url)) {
+            return reply(interaction, {
+              content: '⚠️ צריך קישור תמונה שמתחיל ב־`http://` או `https://`.',
+            });
+          }
+          guildConfig.set(gid, { statusBannerUrl: url });
+          const updated = await refreshStatusCard(interaction.guild, true);
+          return reply(interaction, {
+            content: updated
+              ? '✅ הבאנר עודכן בכרטיס הסטטוס.'
+              : '✅ הבאנר נשמר. הריצו `/status-setup` כדי ליצור כרטיס חדש.',
+          });
         }
 
         case 'anti-nuke': {
@@ -4100,6 +4151,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     switch (interaction.customId) {
+      case 'status_copy_link': {
+        const cfg = configFor(interaction.guild?.id || '');
+        const link = joinLink(cfg.statusCode || DEFAULT_STATUS_CODE);
+        return interaction
+          .reply({ content: `🔗 \`${link}\``, ephemeral: true })
+          .catch(() => {});
+      }
+
       case 'verify_button': {
         // Defer immediately — role + profile API calls can exceed Discord's 3s window.
         await interaction.deferReply({ ephemeral: true }).catch(() => {});
