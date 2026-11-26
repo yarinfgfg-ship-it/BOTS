@@ -182,11 +182,69 @@ async function findStoredStatusMessage(guild) {
   return null;
 }
 
+async function statusTargetChannel(guild) {
+  const cfg = configFor(guild.id);
+  let channel =
+    guild.channels?.cache?.get(cfg.statusChannelId) ||
+    (cfg.statusChannelId
+      ? await client.channels.fetch(cfg.statusChannelId).catch(() => null)
+      : null);
+  if (channel?.isTextBased?.() && !channel.isDMBased?.()) return channel;
+
+  const channels = [...(guild.channels?.cache?.values() || [])];
+  if (!channels.length) {
+    const fetched = await guild.channels?.fetch?.().catch(() => null);
+    if (fetched) channels.push(...fetched.values());
+  }
+  return (
+    channels.find(
+      (ch) =>
+        ch.isTextBased?.() &&
+        !ch.isDMBased?.() &&
+        /status|סטטוס/i.test(ch.name || '')
+    ) || null
+  );
+}
+
+// Self-heal a missing or empty status message (for example after a failed
+// deferred reply) by posting a fresh card in the status channel.
+async function createStatusCard(guild) {
+  const channel = await statusTargetChannel(guild);
+  if (!channel?.send) return false;
+
+  const recent = await channel.messages.fetch({ limit: 20 }).catch(() => null);
+  for (const message of recent?.values() || []) {
+    if (
+      message.author?.id === client.user?.id &&
+      !message.content &&
+      !(message.embeds || []).length &&
+      !(message.components || []).length
+    ) {
+      await message.delete().catch(() => {});
+    }
+  }
+
+  const cfg = configFor(guild.id);
+  const status = await getServerStatus(cfg.statusCode || DEFAULT_STATUS_CODE);
+  const sent = await channel.send({
+    embeds: [buildStatusEmbed(status, cfg.statusBannerUrl)],
+    components: [buildStatusComponents(status.code)],
+  });
+  guildConfig.set(guild.id, {
+    statusChannelId: channel.id,
+    statusMessageId: sent.id,
+    statusCode: cfg.statusCode || DEFAULT_STATUS_CODE,
+  });
+  statusSignatures.set(sent.id, statusSignature(status, cfg.statusBannerUrl));
+  statusDiscoveryDone.delete(guild.id);
+  return true;
+}
+
 // Called on member join (force) and by a 30s poll for player-count changes.
 async function refreshStatusCard(guild, force = false) {
   if (!guild?.id || !client.user) return false;
   const stored = await findStoredStatusMessage(guild);
-  if (!stored?.message?.edit) return false;
+  if (!stored?.message?.edit) return createStatusCard(guild);
 
   const cfg = configFor(guild.id);
   const status = await getServerStatus(cfg.statusCode || DEFAULT_STATUS_CODE);
@@ -197,7 +255,7 @@ async function refreshStatusCard(guild, force = false) {
   try {
     await stored.message.edit({
       embeds: [embed],
-      components: buildStatusComponents(status.code),
+      components: [buildStatusComponents(status.code)],
     });
     statusSignatures.set(stored.message.id, signature);
     return true;
@@ -2635,12 +2693,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
             ? configFor(interaction.guild.id).statusBannerUrl
             : '';
           const embed = buildStatusEmbed(status, bannerUrl);
-          const components = buildStatusComponents(status.code);
+          const components = [buildStatusComponents(status.code)];
           let sent = null;
           try {
             sent = await interaction.editReply({ embeds: [embed], components });
-          } catch {
-            sent = await interaction.reply({ embeds: [embed], components }).catch(() => null);
+          } catch (err) {
+            console.error('[status-setup] edit reply:', err.message);
+            sent = await interaction
+              .followUp({ embeds: [embed], components })
+              .catch(() => null);
           }
           if (sent?.id && interaction.guild) {
             guildConfig.set(interaction.guild.id, {
