@@ -310,12 +310,20 @@ const commands = [
   new SlashCommandBuilder()
     .setName('staff-roles')
     .setDescription('רולי צוות שרואים טיקטים — בלי פקודות בוט (בעלים בלבד)')
-    .addSubcommand((s) =>
-      s
+    .addSubcommand((s) => {
+      let add = s
         .setName('add')
-        .setDescription('הוספת רול צוות')
-        .addRoleOption((o) => o.setName('role').setDescription('הרול להוספה').setRequired(true))
-    )
+        .setDescription('הוספת רולי צוות (עד 10 בפקודה אחת)');
+      for (let i = 1; i <= 10; i += 1) {
+        add = add.addRoleOption((o) =>
+          o
+            .setName(`role${i}`)
+            .setDescription(i === 1 ? 'רול להוספה' : `רול נוסף ${i}`)
+            .setRequired(i === 1)
+        );
+      }
+      return add;
+    })
     .addSubcommand((s) =>
       s
         .setName('remove')

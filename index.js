@@ -3785,17 +3785,52 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
           const current = [...(configFor(interaction.guild.id).staffRoles || [])];
           const sub = interaction.options.getSubcommand();
-          const role = interaction.options.getRole('role');
 
           if (sub === 'add') {
-            if (!current.includes(role.id)) current.push(role.id);
-            guildConfig.set(interaction.guild.id, { staffRoles: current });
-            return reply(interaction, {
-              content: `✅ הרול <@&${role.id}> נוסף לצוות שרואה טיקטים בלבד.`,
-            });
+            const picked = [];
+            const seen = new Set();
+            for (let i = 1; i <= 10; i += 1) {
+              const optionRole = interaction.options.getRole(`role${i}`);
+              if (optionRole && !seen.has(optionRole.id)) {
+                seen.add(optionRole.id);
+                picked.push(optionRole);
+              }
+            }
+            // Backward compatibility with the old single `role` option.
+            const legacy = interaction.options.getRole('role');
+            if (legacy && !seen.has(legacy.id)) picked.push(legacy);
+
+            if (!picked.length) {
+              return reply(interaction, { content: '⚠️ יש לבחור לפחות רול אחד.' });
+            }
+
+            const next = [...current];
+            const added = [];
+            const already = [];
+            for (const optionRole of picked) {
+              if (next.includes(optionRole.id)) already.push(`<@&${optionRole.id}>`);
+              else {
+                next.push(optionRole.id);
+                added.push(`<@&${optionRole.id}>`);
+              }
+            }
+            guildConfig.set(interaction.guild.id, { staffRoles: next });
+
+            const lines = [];
+            if (added.length === 1) {
+              lines.push(`✅ הרול ${added[0]} נוסף לצוות שרואה טיקטים בלבד.`);
+            } else if (added.length > 1) {
+              lines.push(`✅ נוספו ${added.length} רולים: ${added.join(', ')}.`);
+            } else {
+              lines.push('✅ כל הרולים כבר היו ברשימה.');
+            }
+            if (already.length) lines.push(`כבר היו: ${already.join(', ')}.`);
+            return reply(interaction, { content: lines.join(' ') });
           }
 
           if (sub === 'remove') {
+            const role = interaction.options.getRole('role');
+            if (!role) return reply(interaction, { content: '⚠️ יש לבחור רול להסרה.' });
             const next = current.filter((id) => id !== role.id);
             guildConfig.set(interaction.guild.id, { staffRoles: next });
             return reply(interaction, { content: `✅ הרול <@&${role.id}> הוסר.` });

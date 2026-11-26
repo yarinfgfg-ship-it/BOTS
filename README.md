@@ -73,7 +73,7 @@ render.yaml           Render free service config
 | `/ticket-admin close ticket:#channel` | Close any ticket from outside its channel |
 | `/ticket-admin rename ticket:#channel name:...` | Rename any ticket channel |
 | `/ticket-admin-role add/remove/list role:@role` | Configure admin roles that can use `/ticket-admin` |
-| `/staff-roles add/remove/list role:@role` | Owner-only (ID `1090650042030899262`): roles that can see and take tickets but cannot use any bot command |
+| `/staff-roles add role1:@a role2:@b ...` / `remove role:@r` / `list` | Owner-only (ID `1090650042030899262`): roles that can see and take tickets but cannot use any bot command. `add` accepts up to 10 roles in one command |
 | `/status-setup` | Public Hebrew PNG status photo for `cfx.re/join/a4xxqgk`: online/offline, player bar, allowlist/admin access, uptime, copy-link button and join link. The image is edited in place on every Discord member join and when FiveM player counts change |
 | `/status-banner url:https://...` | Admin-only: set/remove the full photo background on the status card (no URL = remove). Saved locally and in the channel topic so it survives redeploys |
 | `/anti-nuke on/off/status/snapshot/restore/log/threshold` | Owner-only anti-nuke watchdog: detects mass deletions/permission changes and restores saved roles and channels |
