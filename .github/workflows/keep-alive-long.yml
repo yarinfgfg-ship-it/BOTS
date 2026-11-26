@@ -1,19 +1,29 @@
 name: Keep Render bot awake (long runner)
 
-# GitHub's short cron events can be delayed for hours. This job stays alive for
-# ~5.5 hours and pings Render every 4 minutes, so the free service does not
-# idle out. A second job starts 3 hours later to overlap any scheduling delay.
+# Self-dispatching chain: every run pings Render every 4 minutes for ~5h40,
+# then queues the next run. workflow_dispatch is not delayed like cron, so this
+# keeps the free Render service warm even when GitHub's cron events are late.
+# The cron entry below is only a fallback if the chain ever stops.
 on:
   schedule:
     - cron: '0 */6 * * *'
   workflow_dispatch:
+
+permissions:
+  actions: write
+
+concurrency:
+  group: render-keep-alive-long
+  cancel-in-progress: false
 
 jobs:
   keep:
     runs-on: ubuntu-latest
     timeout-minutes: 350
     steps:
-      - name: Ping Render every 4 minutes
+      - name: Ping Render every 4 minutes and dispatch the next run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           for i in $(seq 1 85); do
             echo "$(date -u +%FT%TZ) ping $i"
@@ -21,3 +31,8 @@ jobs:
             echo
             sleep 240
           done
+          echo "$(date -u +%FT%TZ) dispatching next run"
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${{ github.repository }}/actions/workflows/keep-alive-long.yml/dispatches" \
+            -f ref=main
