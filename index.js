@@ -48,7 +48,6 @@ const {
   buildStatusComponents,
   joinLink,
 } = require('./src/serverStatus');
-const { buildStatusCard } = require('./src/statusCard');
 const antiNuke = require('./src/antiNuke');
 const {
   ensureVerifyRole,
@@ -130,10 +129,6 @@ function statusSignature(status, bannerUrl = '') {
     status.lastSeenMs ? Math.floor(status.lastSeenMs / 60_000) : null,
     bannerUrl || '',
   ]);
-}
-
-function statusAttachment(buffer) {
-  return new AttachmentBuilder(buffer, { name: 'status-card.png' });
 }
 
 function isStatusCardMessage(message) {
@@ -251,12 +246,8 @@ async function createStatusCard(guild) {
 
   const cfg = configFor(guild.id);
   const status = await getServerStatus(cfg.statusCode || DEFAULT_STATUS_CODE);
-  const image = await buildStatusCard({
-    status,
-    bannerUrl: cfg.statusBannerUrl,
-  });
   const sent = await channel.send({
-    files: [statusAttachment(image)],
+    embeds: [buildStatusEmbed(status)],
     components: [buildStatusComponents(status.code)],
   });
   guildConfig.set(guild.id, {
@@ -280,14 +271,9 @@ async function refreshStatusCard(guild, force = false) {
   const signature = statusSignature(status, cfg.statusBannerUrl);
   if (!force && statusSignatures.get(stored.message.id) === signature) return false;
 
-  const image = await buildStatusCard({
-    status,
-    bannerUrl: cfg.statusBannerUrl,
-  });
   try {
     await stored.message.edit({
-      embeds: [],
-      files: [statusAttachment(image)],
+      embeds: [buildStatusEmbed(status)],
       attachments: [],
       components: [buildStatusComponents(status.code)],
     });
@@ -574,7 +560,7 @@ function ticketMainEmbed(channel, guildCfg) {
     });
   }
 
-  if (guildCfg.imageUrl) embed.setImage(guildCfg.imageUrl);
+  // The panel photo belongs on /ticket-setup only — never inside a ticket.
   return brandEmbed(embed);
 }
 
@@ -2746,19 +2732,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const bannerUrl = interaction.guild
             ? configFor(interaction.guild.id).statusBannerUrl
             : '';
-          const image = await buildStatusCard({ status, bannerUrl });
+          const embed = buildStatusEmbed(status);
           const components = [buildStatusComponents(status.code)];
           let sent = null;
           try {
-            sent = await interaction.editReply({
-              files: [statusAttachment(image)],
-              components,
-            });
+            sent = await interaction.editReply({ embeds: [embed], components });
           } catch (err) {
             console.error('[status-setup] edit reply:', err.message);
-            sent = await interaction
-              .followUp({ files: [statusAttachment(image)], components })
-              .catch(() => null);
+            sent = await interaction.followUp({ embeds: [embed], components }).catch(() => null);
           }
           if (sent?.id && interaction.guild) {
             guildConfig.set(interaction.guild.id, {

@@ -200,7 +200,9 @@ function statusAccessText(status) {
   return status.adminOnly ? 'רק מורשים / אדמין' : 'לא — פתוח לכולם';
 }
 
-function buildStatusEmbed(status, bannerUrl = '') {
+// Live text card — no canvas photo, no banner attachment. The status is a
+// real Discord embed, so player counts, uptime, links and buttons stay live.
+function buildStatusEmbed(status) {
   const dash = '—';
   const join = joinLink(status.code);
   const access = statusAccessText(status);
@@ -211,18 +213,17 @@ function buildStatusEmbed(status, bannerUrl = '') {
 
   const embed = new EmbedBuilder()
     .setColor(status.online ? '#2ECC71' : '#E74C3C')
-    .setTitle(status.online ? '🟢 השרת אונליין' : '🔴 השרת אופליין')
+    .setTitle(status.name || `FiveM • ${status.code}`)
+    .setURL(join)
     .setDescription(
       [
-        `**${status.name}**`,
+        `${status.online ? '🟢' : '🔴'} **${status.online ? 'השרת פעיל' : 'השרת לא פעיל'}**`,
+        `🎮 קוד הצטרפות: \`${status.code}\``,
         `🔗 [cfx.re/join/${status.code}](${join})`,
         status.online ? '' : '⚠️ השרת לא זוהה כרגע בשרתוני FiveM.',
       ]
         .filter(Boolean)
         .join('\n')
-    )
-    .setThumbnail(
-      `https://frontend.cfx-services.net/api/servers/icon/${encodeURIComponent(status.code)}/0.png`
     )
     .addFields(
       { name: '👥 שחקנים', value: players, inline: false },
@@ -237,15 +238,12 @@ function buildStatusEmbed(status, bannerUrl = '') {
         value: status.lastSeenMs
           ? `<t:${Math.floor(status.lastSeenMs / 1000)}:R>`
           : dash,
-        inline: false,
+        inline: true,
       }
     )
-    .setFooter({ text: `בדיקת סטטוס • ${status.code}` })
+    .setFooter({ text: `New Life RP • ${status.code}` })
     .setTimestamp();
 
-  if (/^https?:\/\/\S+$/i.test(String(bannerUrl || '').trim())) {
-    embed.setImage(String(bannerUrl).trim());
-  }
   return embed;
 }
 
