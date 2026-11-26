@@ -2506,17 +2506,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
       switch (interaction.commandName) {
         case 'status-setup': {
+          // Public reply — everyone in the channel can see the status card.
           try {
-            await interaction.deferReply({ ephemeral: true });
+            await interaction.deferReply();
           } catch {
-            // Interaction may already be acknowledged — reply() handles both.
+            // Interaction may already be acknowledged.
           }
           const status = await getServerStatus(DEFAULT_STATUS_CODE);
           const embed = buildStatusEmbed(status);
           try {
             await interaction.editReply({ embeds: [embed] });
           } catch {
-            await reply(interaction, { embeds: [embed] });
+            await interaction.reply({ embeds: [embed] }).catch(() => {});
           }
           return;
         }

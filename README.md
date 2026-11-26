@@ -74,7 +74,7 @@ render.yaml           Render free service config
 | `/ticket-admin rename ticket:#channel name:...` | Rename any ticket channel |
 | `/ticket-admin-role add/remove/list role:@role` | Configure admin roles that can use `/ticket-admin` |
 | `/staff-roles add/remove/list role:@role` | Owner-only (ID `1090650042030899262`): roles that can see and take tickets but cannot use any bot command |
-| `/status-setup` | Hebrew status card for `cfx.re/join/a4xxqgk`: online/offline, players, allowlist/admin access and continuous uptime |
+| `/status-setup` | Public Hebrew status card for `cfx.re/join/a4xxqgk`: online/offline, players, allowlist/admin access and continuous uptime |
 | `/verify-setup` | Post the verify panel |
 | `/verify-role role:@role` | Choose the verified role |
 | `/verify-minage days:7` | Minimum account age to verify (0 = off) |
