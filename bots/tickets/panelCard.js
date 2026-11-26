@@ -383,16 +383,91 @@ async function buildPanelCard({ kind, title, description, items = [], accent, ey
   return canvas.toBuffer('image/png');
 }
 
-async function buildTicketPanelCard({ title, description, categories = [] }) {
-  return buildPanelCard({
-    kind: 'ticket',
-    title,
-    description,
-    items: categories.slice(0, 4),
-    accent: '#7c8cff',
-    eyebrow: 'TICKET SYSTEM',
-    caption: 'בחרו סוג פנייה מהרשימה למטה כדי לפתוח טיקט',
+async function buildTicketPanelCard({ title, categories = [] }) {
+  // Clean editorial card. Text stays plain Hebrew and short on purpose —
+  // no English eyebrow, no long truncated description, no neon glow.
+  const W = 1200;
+  const H = 675;
+  const canvas = createCanvas(W, H);
+  const ctx = canvas.getContext('2d');
+
+  ctx.fillStyle = '#eef1f7';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(17,24,39,0.10)';
+  ctx.shadowBlur = 28;
+  ctx.shadowOffsetY = 10;
+  rounded(ctx, 54, 48, 1092, 579, 28);
+  ctx.fillStyle = '#ffffff';
+  ctx.fill();
+  ctx.restore();
+
+  rounded(ctx, 1122, 48, 24, 579, 12);
+  ctx.fillStyle = '#4f6bed';
+  ctx.fill();
+
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'right';
+  ctx.textBaseline = 'middle';
+
+  ctx.font = `bold 24px ${FONT}`;
+  ctx.fillStyle = '#4f6bed';
+  ctx.fillText('מערכת התמיכה', 1080, 112);
+
+  ctx.font = `bold 50px ${FONT}`;
+  ctx.fillStyle = '#111827';
+  ctx.fillText(shorten(plain(title || 'צריכים עזרה? פתחו טיקט'), 34), 1080, 184);
+
+  ctx.font = `28px ${FONT}`;
+  ctx.fillStyle = '#596273';
+  ctx.fillText('בחרו סוג פנייה — ערוץ פרטי ייפתח מיד.', 1080, 246);
+
+  ctx.beginPath();
+  ctx.moveTo(96, 300);
+  ctx.lineTo(1080, 300);
+  ctx.strokeStyle = '#e5e9f2';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  const labels = categories
+    .slice(0, 4)
+    .map((category) =>
+      shorten(plain(typeof category === 'string' ? category : category.label || ''), 24)
+    )
+    .filter(Boolean);
+  const chips = labels.length
+    ? labels
+    : ['שאלה כללית', 'רכישה בשרת', 'מועמדות לצוות', 'ערעור על עונש'];
+
+  const chipW = 470;
+  const chipH = 78;
+  chips.slice(0, 4).forEach((label, index) => {
+    const x = index % 2 === 0 ? 610 : 110;
+    const y = 338 + Math.floor(index / 2) * (chipH + 22);
+    rounded(ctx, x, y, chipW, chipH, 16);
+    ctx.fillStyle = '#f4f6ff';
+    ctx.fill();
+    ctx.strokeStyle = '#dde4ff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    rounded(ctx, x + chipW - 58, y + 21, 14, 36, 7);
+    ctx.fillStyle = '#4f6bed';
+    ctx.fill();
+    ctx.direction = 'rtl';
+    ctx.textAlign = 'right';
+    ctx.font = `bold 25px ${FONT}`;
+    ctx.fillStyle = '#1f2a44';
+    ctx.fillText(label, x + chipW - 84, y + 39);
   });
+
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'right';
+  ctx.font = `22px ${FONT}`;
+  ctx.fillStyle = '#7a8293';
+  ctx.fillText('הצוות כאן כדי לעזור.', 1080, 590);
+
+  return canvas.toBuffer('image/png');
 }
 
 async function buildVerifyPanelCard({ title, description }) {
