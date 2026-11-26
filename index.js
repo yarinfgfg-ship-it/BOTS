@@ -51,6 +51,8 @@ const antiNuke = require('./src/antiNuke');
 const {
   ensureVerifyRole,
   rememberVerifyRole,
+  rememberStatusBanner,
+  findStatusBanner,
 } = require('./src/verifyRole');
 
 // GuildMembers is required for the automatic welcome message on join.
@@ -2471,8 +2473,11 @@ client.once(Events.ClientReady, async (c) => {
   // Sync existing messages with the latest saved settings on every start.
   for (const guild of c.guilds.cache.values()) {
     try {
-      // Repair the verify role from Discord state before panels/replies use it.
+      // Repair the verify role and status banner from Discord state before
+      // panels/replies use them.
       await ensureVerifyRole(guild);
+      const markedBanner = await findStatusBanner(guild);
+      if (markedBanner) await rememberStatusBanner(guild, markedBanner);
       const cfg = configFor(guild.id);
       const tickets = await refreshTicketEmbeds(guild, cfg);
       const panels = await refreshPanelEmbeds(guild, cfg);
@@ -2663,10 +2668,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
             });
           }
 
-          const gid = interaction.guild.id;
           const raw = interaction.options.getString('url');
           if (!raw) {
-            guildConfig.set(gid, { statusBannerUrl: null });
+            await rememberStatusBanner(interaction.guild, null, interaction.channel);
             const updated = await refreshStatusCard(interaction.guild, true);
             return reply(interaction, {
               content: updated
@@ -2681,7 +2685,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
               content: '⚠️ צריך קישור תמונה שמתחיל ב־`http://` או `https://`.',
             });
           }
-          guildConfig.set(gid, { statusBannerUrl: url });
+          await rememberStatusBanner(interaction.guild, url, interaction.channel);
           const updated = await refreshStatusCard(interaction.guild, true);
           return reply(interaction, {
             content: updated

@@ -6,6 +6,8 @@ const guildConfig = require('./guildConfig');
 // that wipe the container filesystem.
 const MARKER_PREFIX = 'discord-ticket-bot verifyRole=';
 const MARKER_RE = /discord-ticket-bot\s+verifyRole=(\d{17,20})/i;
+const BANNER_PREFIX = 'discord-ticket-bot statusBanner=';
+const BANNER_RE = /discord-ticket-bot\s+statusBanner=(\S+)/i;
 
 function uniqueNonEmpty(values) {
   return [...new Set(values.filter((v) => typeof v === 'string' && v.trim()))];
@@ -129,9 +131,52 @@ async function ensureVerifyRole(guild) {
   }
 }
 
+// The status banner is stored in the same durable channel topic so a full
+// redeploy cannot lose it either.
+async function findStatusBanner(guild) {
+  if (!guild?.id) return null;
+  for (const channel of await allChannels(guild)) {
+    const match = BANNER_RE.exec(channel.topic || '');
+    if (match) return match[1];
+  }
+  return null;
+}
+
+async function rememberStatusBanner(guild, url, preferredChannel) {
+  if (!guild?.id) return;
+  guildConfig.set(guild.id, { statusBannerUrl: url || null });
+
+  const channels = await allChannels(guild);
+  const marked = channels.find(
+    (ch) => MARKER_RE.test(ch.topic || '') || BANNER_RE.test(ch.topic || '')
+  );
+  const target =
+    marked ||
+    preferredChannel ||
+    channels.find(
+      (ch) => /status|סטטוס|verify|אימות/i.test(ch.name || '') && ch.isTextBased?.()
+    );
+  if (!target?.edit) return;
+
+  const kept = String(target.topic || '')
+    .replace(BANNER_RE, '')
+    .trim();
+  const next = url
+    ? [kept, `${BANNER_PREFIX}${url}`].filter(Boolean).join('\n')
+    : kept;
+  if (next !== (target.topic || '')) {
+    await target
+      .edit({ topic: next }, 'Persist status banner')
+      .catch((err) => console.error('[status-banner] topic marker:', err.message));
+  }
+}
+
 module.exports = {
   MARKER_PREFIX,
+  BANNER_PREFIX,
   ensureVerifyRole,
   rememberVerifyRole,
+  rememberStatusBanner,
+  findStatusBanner,
   topicWithMarker,
 };
