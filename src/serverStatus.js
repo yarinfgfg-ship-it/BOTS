@@ -194,16 +194,16 @@ function playerBar(players, maxPlayers) {
   return `\n\`[${'█'.repeat(filled)}${'░'.repeat(total - filled)}]\``;
 }
 
+function statusAccessText(status) {
+  if (!status.online) return '—';
+  if (status.adminOnly === null) return 'לא ידוע';
+  return status.adminOnly ? 'רק מורשים / אדמין' : 'לא — פתוח לכולם';
+}
+
 function buildStatusEmbed(status, bannerUrl = '') {
   const dash = '—';
   const join = joinLink(status.code);
-  const access = status.online
-    ? status.adminOnly === null
-      ? 'לא ידוע'
-      : status.adminOnly
-        ? 'רק מורשים / אדמין'
-        : 'לא — פתוח לכולם'
-    : dash;
+  const access = statusAccessText(status);
   const players = status.online
     ? `${status.players} / ${status.maxPlayers || dash}` +
       playerBar(status.players, status.maxPlayers)
@@ -270,5 +270,6 @@ module.exports = {
   getServerStatus,
   buildStatusEmbed,
   buildStatusComponents,
+  statusAccessText,
   joinLink,
 };

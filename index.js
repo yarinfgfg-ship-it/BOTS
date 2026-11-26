@@ -47,6 +47,7 @@ const {
   buildStatusComponents,
   joinLink,
 } = require('./src/serverStatus');
+const { buildStatusCard } = require('./src/statusCard');
 const antiNuke = require('./src/antiNuke');
 const {
   ensureVerifyRole,
@@ -130,6 +131,35 @@ function statusSignature(status, bannerUrl = '') {
   ]);
 }
 
+function statusAttachment(buffer) {
+  return new AttachmentBuilder(buffer, { name: 'status-card.png' });
+}
+
+function isStatusCardMessage(message) {
+  const attachments = message.attachments?.values?.()
+    ? [...message.attachments.values()]
+    : message.attachments || [];
+  if (attachments.some((a) => a.name === 'status-card.png')) return true;
+
+  const buttons = (message.components || []).flatMap((row) => row.components || []);
+  if (
+    buttons.some(
+      (c) =>
+        c.customId === 'status_copy_link' ||
+        /cfx\.re\/join\//i.test(c.url || '')
+    )
+  ) {
+    return true;
+  }
+
+  // Legacy text embeds still count so an old card can be replaced in place.
+  return (message.embeds || []).some((e) =>
+    /בדיקת סטטוס|השרת (אונליין|אופליין)/.test(
+      `${e.footer?.text || ''} ${e.title || ''}`
+    )
+  );
+}
+
 async function findStoredStatusMessage(guild) {
   const cfg = configFor(guild.id);
 
@@ -163,13 +193,7 @@ async function findStoredStatusMessage(guild) {
     const messages = await ch.messages.fetch({ limit: 50 }).catch(() => null);
     if (!messages) continue;
     const message = messages.find(
-      (m) =>
-        m.author?.id === client.user?.id &&
-        (m.embeds || []).some((e) =>
-          /בדיקת סטטוס|השרת (אונליין|אופליין)/.test(
-            `${e.footer?.text || ''} ${e.title || ''}`
-          )
-        )
+      (m) => m.author?.id === client.user?.id && isStatusCardMessage(m)
     );
     if (message) {
       guildConfig.set(guild.id, {
@@ -226,8 +250,12 @@ async function createStatusCard(guild) {
 
   const cfg = configFor(guild.id);
   const status = await getServerStatus(cfg.statusCode || DEFAULT_STATUS_CODE);
+  const image = await buildStatusCard({
+    status,
+    bannerUrl: cfg.statusBannerUrl,
+  });
   const sent = await channel.send({
-    embeds: [buildStatusEmbed(status, cfg.statusBannerUrl)],
+    files: [statusAttachment(image)],
     components: [buildStatusComponents(status.code)],
   });
   guildConfig.set(guild.id, {
@@ -251,10 +279,15 @@ async function refreshStatusCard(guild, force = false) {
   const signature = statusSignature(status, cfg.statusBannerUrl);
   if (!force && statusSignatures.get(stored.message.id) === signature) return false;
 
-  const embed = buildStatusEmbed(status, cfg.statusBannerUrl);
+  const image = await buildStatusCard({
+    status,
+    bannerUrl: cfg.statusBannerUrl,
+  });
   try {
     await stored.message.edit({
-      embeds: [embed],
+      embeds: [],
+      files: [statusAttachment(image)],
+      attachments: [],
       components: [buildStatusComponents(status.code)],
     });
     statusSignatures.set(stored.message.id, signature);
@@ -2692,15 +2725,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const bannerUrl = interaction.guild
             ? configFor(interaction.guild.id).statusBannerUrl
             : '';
-          const embed = buildStatusEmbed(status, bannerUrl);
+          const image = await buildStatusCard({ status, bannerUrl });
           const components = [buildStatusComponents(status.code)];
           let sent = null;
           try {
-            sent = await interaction.editReply({ embeds: [embed], components });
+            sent = await interaction.editReply({
+              files: [statusAttachment(image)],
+              components,
+            });
           } catch (err) {
             console.error('[status-setup] edit reply:', err.message);
             sent = await interaction
-              .followUp({ embeds: [embed], components })
+              .followUp({ files: [statusAttachment(image)], components })
               .catch(() => null);
           }
           if (sent?.id && interaction.guild) {
