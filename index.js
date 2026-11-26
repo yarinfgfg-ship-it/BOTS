@@ -108,6 +108,99 @@ function configFor(guildId) {
   });
 }
 
+// The public status card is edited in place. These two maps avoid rescanning
+// channels for an existing card and avoid pointless edits when nothing changed.
+const statusSignatures = new Map();
+const statusDiscoveryDone = new Set();
+
+function statusSignature(status) {
+  return JSON.stringify([
+    status.online,
+    status.name,
+    status.players,
+    status.maxPlayers,
+    status.adminOnly,
+    Math.floor((status.uptimeMs || 0) / 60_000),
+    status.lastSeenMs ? Math.floor(status.lastSeenMs / 60_000) : null,
+  ]);
+}
+
+async function findStoredStatusMessage(guild) {
+  const cfg = configFor(guild.id);
+
+  let channel =
+    guild.channels?.cache?.get(cfg.statusChannelId) ||
+    (cfg.statusChannelId
+      ? await client.channels.fetch(cfg.statusChannelId).catch(() => null)
+      : null);
+  if (channel?.isTextBased?.() && cfg.statusMessageId) {
+    const message = await channel.messages.fetch(cfg.statusMessageId).catch(() => null);
+    if (message) return { channel, message };
+  }
+
+  if (statusDiscoveryDone.has(guild.id)) return null;
+  statusDiscoveryDone.add(guild.id);
+
+  const channels = [...(guild.channels?.cache?.values() || [])];
+  if (!channels.length) {
+    const fetched = await guild.channels?.fetch?.().catch(() => null);
+    if (fetched) channels.push(...fetched.values());
+  }
+
+  const candidates = channels.filter(
+    (ch) =>
+      ch.isTextBased?.() &&
+      !ch.isDMBased?.() &&
+      (ch.id === cfg.statusChannelId || /status|סטטוס/i.test(ch.name || ''))
+  );
+
+  for (const ch of candidates) {
+    const messages = await ch.messages.fetch({ limit: 50 }).catch(() => null);
+    if (!messages) continue;
+    const message = messages.find(
+      (m) =>
+        m.author?.id === client.user?.id &&
+        (m.embeds || []).some((e) =>
+          /בדיקת סטטוס|השרת (אונליין|אופליין)/.test(
+            `${e.footer?.text || ''} ${e.title || ''}`
+          )
+        )
+    );
+    if (message) {
+      guildConfig.set(guild.id, {
+        statusChannelId: ch.id,
+        statusMessageId: message.id,
+      });
+      return { channel: ch, message };
+    }
+  }
+  return null;
+}
+
+// Called on member join (force) and by a 30s poll for player-count changes.
+async function refreshStatusCard(guild, force = false) {
+  if (!guild?.id || !client.user) return false;
+  const stored = await findStoredStatusMessage(guild);
+  if (!stored?.message?.edit) return false;
+
+  const cfg = configFor(guild.id);
+  const status = await getServerStatus(cfg.statusCode || DEFAULT_STATUS_CODE);
+  const signature = statusSignature(status);
+  if (!force && statusSignatures.get(stored.message.id) === signature) return false;
+
+  const embed = buildStatusEmbed(status);
+  try {
+    await stored.message.edit({ embeds: [embed] });
+    statusSignatures.set(stored.message.id, signature);
+    return true;
+  } catch (err) {
+    console.error(`[status-refresh] ${guild.id}:`, err.message);
+    guildConfig.set(guild.id, { statusMessageId: null });
+    statusDiscoveryDone.delete(guild.id);
+    return false;
+  }
+}
+
 /**
  * Bring saved panels up to the current description + category list once per
  * text version. Hosts re-seed GUILDS_JSON on boot, so this is safe to re-apply.
@@ -2399,6 +2492,15 @@ client.once(Events.ClientReady, async (c) => {
       .tick(c, [c.user.id, PRIVATE_OWNER_ID])
       .catch((err) => console.error('[anti-nuke]', err.message));
   }, 30_000).unref?.();
+
+  // Keep the public status card current when FiveM player counts change.
+  setInterval(() => {
+    for (const guild of c.guilds.cache.values()) {
+      refreshStatusCard(guild).catch((err) =>
+        console.error('[status-refresh]', err.message)
+      );
+    }
+  }, 30_000).unref?.();
 });
 
 // Never let an unexpected async error take the whole bot down.
@@ -2408,6 +2510,11 @@ client.on(Events.Error, (err) => {
 
 // Automatic welcome message with a large profile picture on member join.
 client.on(Events.GuildMemberAdd, async (member) => {
+  // Refresh the public FiveM status card on every Discord server join.
+  refreshStatusCard(member.guild, true).catch((err) =>
+    console.error('[status-refresh]', err.message)
+  );
+
   try {
     const gid = member.guild.id;
     const cfg = configFor(gid);
@@ -2514,10 +2621,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
           const status = await getServerStatus(DEFAULT_STATUS_CODE);
           const embed = buildStatusEmbed(status);
+          let sent = null;
           try {
-            await interaction.editReply({ embeds: [embed] });
+            sent = await interaction.editReply({ embeds: [embed] });
           } catch {
-            await interaction.reply({ embeds: [embed] }).catch(() => {});
+            sent = await interaction.reply({ embeds: [embed] }).catch(() => null);
+          }
+          if (sent?.id) {
+            guildConfig.set(interaction.guild.id, {
+              statusChannelId: interaction.channel.id,
+              statusMessageId: sent.id,
+              statusCode: DEFAULT_STATUS_CODE,
+            });
+            statusSignatures.set(sent.id, statusSignature(status));
+            statusDiscoveryDone.delete(interaction.guild.id);
           }
           return;
         }
