@@ -468,6 +468,18 @@ module.exports = {
     ].join('\n'),
     footer: '',
     fileName: 'ticket-{number}-transcript.txt',
+
+    // One editable lifecycle message per ticket: opened, taken, closed, rated.
+    lifecycleTitle: '🎫 טיקט #{number} — סיכום',
+    lifecycleDescription: [
+      '**נפתח על ידי:** {opener}',
+      '**נלקח על ידי:** {claimer}',
+      '**נסגר על ידי:** {closer}',
+      '**דירוג:** {rating}',
+    ].join('\n'),
+    pending: '⏳ ממתין...',
+    notRated: '— טרם דורג',
+    lifecycleFooter: 'סיכום טיקט',
   },
 
   // ---------------------------------------------------------------------

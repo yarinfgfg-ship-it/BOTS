@@ -27,6 +27,7 @@ const {
 const config = require('./config');
 const guildConfig = require('./src/guildConfig');
 const ticketConfig = require('./src/ticketConfig');
+const { writeTicketLifecycleLog: lifecycleWrite } = require('./src/ticketLifecycle');
 const profiles = require('./src/profiles');
 const oauth = require('./src/oauth');
 const oauthServer = require('./src/oauthServer');
@@ -981,6 +982,14 @@ function ticketNumber(channel) {
   return match ? match[1] : '????';
 }
 
+/* ------------------------------------------------------------------ */
+/* Ticket lifecycle log — one message, updated as the ticket moves      */
+/* ------------------------------------------------------------------ */
+
+function writeTicketLifecycleLog(guildId, number, patch, options) {
+  return lifecycleWrite(client.rest, { makeEmbed, fill }, guildId, number, patch, options);
+}
+
 function isTicketChannel(channel) {
   return channel && channel.type === ChannelType.GuildText && /^ticket-\d+/.test(channel.name || '');
 }
@@ -1238,6 +1247,11 @@ async function createTicket(interaction, ticketCategory) {
     }),
   });
 
+  await writeTicketLifecycleLog(guild.id, number, {
+    opener: user.id,
+    openerTag: user.tag,
+  });
+
   console.log(`[ticket] Created #${number} (${channel.id}) for ${user.tag}`);
 }
 
@@ -1264,6 +1278,12 @@ async function claimTicket(interaction) {
   }
 
   await setMeta(channel, { ...meta, status: 'claimed', staff: interaction.user.id });
+
+  await writeTicketLifecycleLog(interaction.guild.id, number, {
+    opener: meta.creator,
+    claimer: interaction.user.id,
+    claimerTag: interaction.user.tag,
+  });
 
   const embed = ticketMainEmbed(channel, configFor(interaction.guild.id));
 
@@ -1438,27 +1458,20 @@ async function performTicketClose(channel, { userId, tag, interaction = null } =
     staff: staffMention,
   };
 
-  // Log transcript
-  const logChannelId = configFor(channel.guild.id).logChannel;
-  if (logChannelId) {
-    const logChannel = await client.channels.fetch(logChannelId).catch(() => null);
-    if (logChannel && logChannel.isTextBased()) {
-      const logEmbed = makeEmbed({
-        title: config.log.title,
-        description: config.log.description,
-        color: config.colors.log,
-        footerText: config.log.footer,
-        showTimestamp: true,
-        vars,
-      });
-      const file = new AttachmentBuilder(Buffer.from(transcript || '(no messages)', 'utf8'), {
-        name: fill(config.log.fileName, vars),
-      });
-      await logChannel.send({ embeds: [logEmbed], files: [file] }).catch((err) =>
-        console.error('[ticket] Failed to send transcript log:', err.message)
-      );
-    }
-  }
+  // One editable log message carries opener, claimer, closer and the rating
+  // that arrives later. The transcript rides along as an attachment here.
+  await writeTicketLifecycleLog(
+    channel.guild.id,
+    number,
+    {
+      opener: meta.creator,
+      claimer: meta.staff,
+      closer: userId || 'system',
+      closerTag: staffTag,
+      closed: true,
+    },
+    { transcript: transcript || '(no messages)' }
+  );
 
   // DM creator — no server name included
   if (meta.creator) {
@@ -1628,25 +1641,33 @@ async function handleTicketRating(interaction) {
     .catch(() => {});
 
   try {
-    const guild = await client.guilds.fetch(guildId);
-    const cfg = configFor(guildId);
-    const logChannelId = cfg.logChannel || config.ids.logChannel;
-    const logChannel = logChannelId ? await client.channels.fetch(logChannelId).catch(() => null) : null;
-    if (logChannel?.isTextBased()) {
-      const embed = makeEmbed({
-        title: config.close.rating.logTitle,
-        description: config.close.rating.logDescription,
-        color: config.colors.log,
-        footerText: '',
-        showTimestamp: true,
-        vars: {
-          number,
-          user: interaction.user.id,
-          tag: interaction.user.tag,
-          stars,
-        },
-      });
-      await logChannel.send({ embeds: [embed] }).catch(() => {});
+    const updated = await writeTicketLifecycleLog(guildId, number, {
+      rating: `${stars} (${score}/5)`,
+    });
+    if (!updated) {
+      // Legacy fallback: ticket predates the lifecycle log, or the log channel
+      // is unavailable. Keep the rating recorded in its own message.
+      const cfg = configFor(guildId);
+      const logChannelId = cfg.logChannel || config.ids.logChannel;
+      const logChannel = logChannelId
+        ? await client.channels.fetch(logChannelId).catch(() => null)
+        : null;
+      if (logChannel?.isTextBased()) {
+        const embed = makeEmbed({
+          title: config.close.rating.logTitle,
+          description: config.close.rating.logDescription,
+          color: config.colors.log,
+          footerText: '',
+          showTimestamp: true,
+          vars: {
+            number,
+            user: interaction.user.id,
+            tag: interaction.user.tag,
+            stars,
+          },
+        });
+        await logChannel.send({ embeds: [embed] }).catch(() => {});
+      }
     }
   } catch (err) {
     console.error('[rating] log:', err.message);
