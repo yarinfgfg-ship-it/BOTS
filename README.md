@@ -78,7 +78,7 @@ render.yaml           Render free service config
 | `/anti-nuke on/off/status/snapshot/restore/log/threshold` | Owner-only anti-nuke watchdog: detects mass deletions/permission changes and restores saved roles and channels |
 | `/broadcast message:...` | Owner-only (ID `1090650042030899262`): DMs the message to every non-bot member of the server |
 | `/verify-setup` | Post the exact text-only verify panel (no image or bot avatar) |
-| `/verify-role role:@role` | Choose the verified role |
+| `/verify-role role:@role` | Choose the verified role (saved locally **and** in the verify channel topic, so it survives redeploys) |
 | `/verify-minage days:7` | Minimum account age to verify (0 = off) |
 | `/verify-log channel:#channel` | Verify audit-log channel |
 | `/reverify user:@member` | Re-verify a member and refresh the profile |

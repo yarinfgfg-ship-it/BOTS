@@ -46,6 +46,10 @@ const {
   buildStatusEmbed,
 } = require('./src/serverStatus');
 const antiNuke = require('./src/antiNuke');
+const {
+  ensureVerifyRole,
+  rememberVerifyRole,
+} = require('./src/verifyRole');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
@@ -677,7 +681,8 @@ async function addAuthorizedToGuild(guild) {
   const stats = { added: 0, existing: 0, failed: 0, skipped: 0 };
   if (!authorized.length) return stats;
 
-  const roleId = configFor(guild.id).verifyRoleId;
+  const verifyCfg = await ensureVerifyRole(guild);
+  const roleId = verifyCfg.verifyRoleId;
 
   for (const entry of authorized) {
     const token = await validAccessToken(entry);
@@ -2327,10 +2332,10 @@ async function syncAutoModRules(guild) {
 // login fails, otherwise the host thinks the app is dead.
 oauthServer.start(async (user, guildId) => {
   try {
-    const roleId = configFor(guildId).verifyRoleId;
-    if (!roleId) return;
     const guild = client.guilds.cache.get(guildId);
     if (!guild) return;
+    const roleId = (await ensureVerifyRole(guild)).verifyRoleId;
+    if (!roleId) return;
     const member = await guild.members.fetch(user.id).catch(() => null);
     if (member && !member.roles.cache.has(roleId)) {
       await member.roles.add(roleId, 'Verified via OAuth2');
@@ -2367,6 +2372,8 @@ client.once(Events.ClientReady, async (c) => {
   // Sync existing messages with the latest saved settings on every start.
   for (const guild of c.guilds.cache.values()) {
     try {
+      // Repair the verify role from Discord state before panels/replies use it.
+      await ensureVerifyRole(guild);
       const cfg = configFor(guild.id);
       const tickets = await refreshTicketEmbeds(guild, cfg);
       const panels = await refreshPanelEmbeds(guild, cfg);
@@ -2605,7 +2612,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
           guildConfig.set(gid, { verifyChannelId: interaction.channel.id });
 
           let roleNote = '';
-          if (!configFor(gid).verifyRoleId) {
+          const currentVerify = await ensureVerifyRole(interaction.guild);
+          if (!currentVerify.verifyRoleId) {
             const existing = interaction.guild.roles.cache.find(
               (r) => r.name === config.verify.roleName
             );
@@ -2619,7 +2627,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
                 })
                 .catch(() => null));
             if (role) {
-              guildConfig.set(gid, { verifyRoleId: role.id });
+              await rememberVerifyRole(interaction.guild, role, interaction.channel);
               roleNote = `\nתפקיד האימות נוצר אוטומטית: <@&${role.id}>`;
             } else {
               roleNote = '\n⚠️ לא נוצר תפקיד אימות. הגדירו אותו עם `/verify-role`.';
@@ -2966,7 +2974,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             });
           }
 
-          guildConfig.set(gid, { verifyRoleId: role.id });
+          await rememberVerifyRole(interaction.guild, role, interaction.channel);
           return reply(interaction, {
             content: `✅ תפקיד האימות בשרת הזה: <@&${role.id}>`,
           });
@@ -3055,7 +3063,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
           const gid = interaction.guild.id;
           const target = interaction.options.getUser('user', true);
-          const cfg = configFor(gid);
+          const cfg = await ensureVerifyRole(interaction.guild);
           if (!cfg.verifyRoleId) {
             return reply(interaction, { content: config.verify.noRole });
           }
@@ -3344,7 +3352,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             }
 
             if (status === 201 || status === 204 || status === 200) {
-              const roleId = configFor(guild.id).verifyRoleId;
+              const roleId = (await ensureVerifyRole(guild)).verifyRoleId;
               if (roleId) {
                 await fetch(
                   `https://discord.com/api/v10/guilds/${guild.id}/members/${userId}/roles/${roleId}`,
@@ -3979,7 +3987,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // Defer immediately — role + profile API calls can exceed Discord's 3s window.
         await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
-        const cfg = configFor(interaction.guild.id);
+        const cfg = await ensureVerifyRole(interaction.guild);
         const roleId = cfg.verifyRoleId;
         if (!roleId) {
           return interaction.editReply({ content: config.verify.noRole }).catch(() => {});

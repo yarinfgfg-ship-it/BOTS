@@ -142,7 +142,7 @@ module.exports = {
     already: '✅ אתם כבר מאומתים.',
     success:
       '✅ האימות הושלם! קיבלתם את התפקיד <@&{role}>.' +
-      '{unverifiedNote}\nפרטי הפרופיל שלכם (שם, תמונה, באנר) נשמרו.',
+      '{unverifiedNote}',
     unverifiedRemoved: '\nהתפקיד <@&{unverified}> הוסר.',
     unverifiedSet: '✅ התפקיד <@&{role}> הוגדר כתפקיד "לא מאומת" — הוא יוסר עם האימות.',
     unverifiedCleared: '✅ תפקיד "לא מאומת" בוטל בשרת הזה.',
