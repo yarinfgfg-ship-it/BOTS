@@ -76,11 +76,10 @@ render.yaml           Render free service config
 | `/staff-roles add/remove/list role:@role` | Owner-only (ID `1090650042030899262`): roles that can see and take tickets but cannot use any bot command |
 | `/status-setup` | Public Hebrew status card for `cfx.re/join/a4xxqgk`: online/offline, players, allowlist/admin access and continuous uptime |
 | `/broadcast message:...` | Owner-only (ID `1090650042030899262`): DMs the message to every non-bot member of the server |
-| `/verify-setup` | Post the verify panel |
+| `/verify-setup` | Post the exact text-only verify panel (no image or bot avatar) |
 | `/verify-role role:@role` | Choose the verified role |
 | `/verify-minage days:7` | Minimum account age to verify (0 = off) |
 | `/verify-log channel:#channel` | Verify audit-log channel |
-| `/verify-image set/url/remove` | Picture on the verify panel and success message |
 | `/reverify user:@member` | Re-verify a member and refresh the profile |
 | `/join-role role:@role` | Role given on join, removed on verify |
 | `/welcome-setup` | Set welcome channel |

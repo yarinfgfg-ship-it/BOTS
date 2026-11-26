@@ -90,29 +90,6 @@ const commands = [
     .addBooleanOption((o) => o.setName('clear').setDescription('ביטול יומן האימות'))
     .toJSON(),
   new SlashCommandBuilder()
-    .setName('verify-image')
-    .setDescription('תמונה בפאנל האימות ובהודעת האימות')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand((s) =>
-      s
-        .setName('set')
-        .setDescription('העלאת קובץ תמונה')
-        .addAttachmentOption((o) =>
-          o.setName('image').setDescription('קובץ התמונה').setRequired(true)
-        )
-    )
-    .addSubcommand((s) =>
-      s
-        .setName('url')
-        .setDescription('שימוש בקישור תמונה')
-        .addStringOption((o) =>
-          o.setName('link').setDescription('קישור http(s)').setRequired(true)
-        )
-    )
-    .addSubcommand((s) => s.setName('remove').setDescription('הסרת התמונה'))
-    .addSubcommand((s) => s.setName('preview').setDescription('הצגת התמונה הנוכחית'))
-    .toJSON(),
-  new SlashCommandBuilder()
     .setName('reverify')
     .setDescription('אימות מחדש של חבר ורענון הפרופיל שלו')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)

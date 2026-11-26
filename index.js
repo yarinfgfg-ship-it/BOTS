@@ -38,7 +38,6 @@ const {
   buildLevelUpCard,
   buildLeaderboardCard,
   buildTicketPanelCard,
-  buildVerifyPanelCard,
 } = require('./src/imageCards');
 const levels = require('./src/levels');
 const {
@@ -422,7 +421,7 @@ async function refreshPanelEmbeds(guild, guildCfg) {
   const channels = [...guild.channels.cache.values()].filter(
     (ch) => ch.type === ChannelType.GuildText
   );
-  const visual = await panelVisual('ticket', guildCfg);
+  const visual = await panelVisual(guildCfg);
   const components = [ticketCategorySelect(guildCfg)];
 
   let updated = 0;
@@ -460,13 +459,13 @@ async function refreshPanelEmbeds(guild, guildCfg) {
 }
 
 /**
- * Add/remove the configured image on every verify panel of a guild.
+ * Bring every existing verify panel back to the exact text-only layout.
+ * This clears old bot-avatar thumbnails, image URLs and uploaded attachments.
  */
-async function refreshVerifyEmbeds(guild, guildCfg) {
+async function refreshVerifyEmbeds(guild) {
   const channels = [...guild.channels.cache.values()].filter(
     (ch) => ch.type === ChannelType.GuildText
   );
-  const visual = await panelVisual('verify', guildCfg);
 
   let updated = 0;
   for (const channel of channels) {
@@ -480,9 +479,14 @@ async function refreshVerifyEmbeds(guild, guildCfg) {
       );
       for (const panel of panels.values()) {
         if (!panel.embeds[0]) continue;
-        const embed = EmbedBuilder.from(panel.embeds[0]);
-        embed.setImage(visual.imageUrl);
-        await panel.edit({ embeds: [embed], files: visual.files });
+        const embed = EmbedBuilder.from(panel.embeds[0])
+          .setTitle(config.verify.title)
+          .setDescription(config.verify.description)
+          .setColor(config.colors.panel)
+          .setImage(null)
+          .setThumbnail(null)
+          .setFooter(null);
+        await panel.edit({ embeds: [embed], components: panel.components, attachments: [] });
         updated++;
       }
     } catch {
@@ -562,25 +566,18 @@ function ticketCategorySelect(guildCfg) {
 }
 
 /**
- * Shared panel visual: a configured picture always wins, otherwise generate a
- * branded canvas card with the same layout for tickets and verification.
+ * Ticket-panel visual only. Verification is intentionally text-only: no
+ * uploaded pictures, no generated canvas card, and no bot avatar thumbnail.
  */
-async function panelVisual(kind, guildCfg) {
-  const customUrl = kind === 'ticket' ? guildCfg.imageUrl : guildCfg.verifyImageUrl;
-  if (customUrl) return { imageUrl: customUrl, files: [] };
+async function panelVisual(guildCfg) {
+  if (guildCfg.imageUrl) return { imageUrl: guildCfg.imageUrl, files: [] };
 
-  const name = kind === 'ticket' ? 'ticket-panel.png' : 'verify-panel.png';
-  const buffer =
-    kind === 'ticket'
-      ? await buildTicketPanelCard({
-          title: guildCfg.panelTitle || config.panel.title,
-          description: guildCfg.panelDescription || config.panel.description,
-          categories: guildCfg.categories || config.ticketCategories,
-        })
-      : await buildVerifyPanelCard({
-          title: config.verify.title,
-          description: config.verify.description,
-        });
+  const name = 'ticket-panel.png';
+  const buffer = await buildTicketPanelCard({
+    title: guildCfg.panelTitle || config.panel.title,
+    description: guildCfg.panelDescription || config.panel.description,
+    categories: guildCfg.categories || config.ticketCategories,
+  });
 
   return {
     imageUrl: `attachment://${name}`,
@@ -588,44 +585,28 @@ async function panelVisual(kind, guildCfg) {
   };
 }
 
-async function verifyPanel(guildId) {
-  const embed = makeEmbed({
-    title: config.verify.title,
-    description: config.verify.description,
-    color: config.colors.panel,
-    footerText: config.brand.footer,
-    showTimestamp: false,
-    vars: {},
-  });
-
-  const visual = await panelVisual('verify', configFor(guildId));
-  embed.setImage(visual.imageUrl);
+function verifyPanel() {
+  // Exact text-only panel. No image, no canvas card, no bot avatar thumbnail.
+  const embed = new EmbedBuilder()
+    .setColor(config.colors.panel)
+    .setTitle(config.verify.title)
+    .setDescription(config.verify.description);
 
   // One click: grant the verified role and remove the unverified role.
-  // No OAuth / external site involved.
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('verify_button')
-      .setLabel(config.verify.buttonLabel)
-      .setEmoji(config.verify.buttonEmoji)
-      .setStyle(ButtonStyle.Success)
-  );
+  // No OAuth / external site involved. The ✅ is part of the label itself.
+  const button = new ButtonBuilder()
+    .setCustomId('verify_button')
+    .setLabel(config.verify.buttonLabel)
+    .setStyle(ButtonStyle.Success);
+  if (config.verify.buttonEmoji) button.setEmoji(config.verify.buttonEmoji);
+  const row = new ActionRowBuilder().addComponents(button);
 
-  return { embed: brandEmbed(embed), row, files: visual.files };
+  return { embed, row };
 }
 
 function verifyReplyPayload(guildId, content) {
-  const payload = { content };
-  const imageUrl = configFor(guildId).verifyImageUrl;
-  if (imageUrl) {
-    payload.embeds = [
-      new EmbedBuilder()
-        .setColor(config.colors.panel)
-        .setTitle(config.verify.imageTitle)
-        .setImage(imageUrl),
-    ];
-  }
-  return payload;
+  // Verification replies stay text-only too — never re-add a saved panel image.
+  return { content };
 }
 
 async function logVerification(
@@ -2388,7 +2369,7 @@ client.once(Events.ClientReady, async (c) => {
       const cfg = configFor(guild.id);
       const tickets = await refreshTicketEmbeds(guild, cfg);
       const panels = await refreshPanelEmbeds(guild, cfg);
-      const verifyPanels = await refreshVerifyEmbeds(guild, cfg);
+      const verifyPanels = await refreshVerifyEmbeds(guild);
       if (tickets || panels || verifyPanels) {
         console.log(
           `[sync] ${guild.id}: tickets=${tickets} panels=${panels} verify=${verifyPanels}`
@@ -2528,9 +2509,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
 
           const gid = interaction.guild.id;
-          const { embed, row, files } = await verifyPanel(gid);
+          const { embed, row } = verifyPanel();
           try {
-            await interaction.channel.send({ embeds: [embed], components: [row], files });
+            await interaction.channel.send({ embeds: [embed], components: [row] });
           } catch (err) {
             return reply(interaction, {
               content:
@@ -2981,46 +2962,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
           });
         }
 
-        case 'verify-image': {
-          if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageGuild)) {
-            return reply(interaction, { content: '⚠️ נדרשת הרשאת ניהול שרת.' });
-          }
-
-          const gid = interaction.guild.id;
-          const sub = interaction.options.getSubcommand();
-
-          if (sub === 'remove') {
-            guildConfig.set(gid, { verifyImageUrl: null });
-            const updated = await refreshVerifyEmbeds(interaction.guild, configFor(gid));
-            return reply(interaction, {
-              content: fill(config.verify.imageRemoved, { updated }),
-            });
-          }
-
-          if (sub === 'preview') {
-            const url = configFor(gid).verifyImageUrl;
-            return reply(interaction, {
-              content: url
-                ? fill(config.verify.imageCurrent, { url })
-                : config.verify.imageNone,
-            });
-          }
-
-          const url =
-            sub === 'url'
-              ? interaction.options.getString('link')
-              : interaction.options.getAttachment('image')?.url || null;
-          if (!url || !/^https?:\/\//i.test(url)) {
-            return reply(interaction, { content: '⚠️ יש לספק תמונה או קישור תקין.' });
-          }
-
-          guildConfig.set(gid, { verifyImageUrl: url });
-          const updated = await refreshVerifyEmbeds(interaction.guild, configFor(gid));
-          return reply(interaction, {
-            content: fill(config.verify.imageSet, { updated }),
-          });
-        }
-
         case 'reverify': {
           if (
             !isOwnerUser(interaction) &&
@@ -3442,7 +3383,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             showTimestamp: false,
             vars: dateVars(),
           });
-          const visual = await panelVisual('ticket', guildCfg);
+          const visual = await panelVisual(guildCfg);
           embed.setImage(visual.imageUrl);
           brandEmbed(embed);
 

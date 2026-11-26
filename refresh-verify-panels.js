@@ -16,15 +16,20 @@ function panelFor(guildId) {
     .setDescription(config.verify.description);
 
   // One click grants the verified role — no OAuth / external site.
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('verify_button')
-      .setLabel(config.verify.buttonLabel)
-      .setEmoji(config.verify.buttonEmoji)
-      .setStyle(ButtonStyle.Success)
-  );
+  // The ✅ is already inside the label, so only add a separate emoji if set.
+  const button = new ButtonBuilder()
+    .setCustomId('verify_button')
+    .setLabel(config.verify.buttonLabel)
+    .setStyle(ButtonStyle.Success);
+  if (config.verify.buttonEmoji) button.setEmoji(config.verify.buttonEmoji);
+  const row = new ActionRowBuilder().addComponents(button);
 
-  return { embeds: [embed.toJSON()], components: [row.toJSON()] };
+  // attachments: [] removes any old uploaded verify-panel picture.
+  return {
+    embeds: [embed.toJSON()],
+    components: [row.toJSON()],
+    attachments: [],
+  };
 }
 
 (async () => {

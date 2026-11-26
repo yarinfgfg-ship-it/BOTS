@@ -1,13 +1,17 @@
 module.exports = {
   colors: { panel: '#5865F2' },
   footer: '🫡 אימות חברים · לחיצה אחת',
-  title: '✅ אימות חברים',
+  title: '🛡️ אימות משתמשים - New Life RP',
   description: [
-    'ברוכים הבאים! לחצו על הכפתור **verify** כדי לאמת את החשבון.',
-    'האימות ייתן לכם את התפקיד **מאומת** ויוריד את התפקיד **לא מאומת**.',
+    'ברוכים הבאים לשרת New Life RP!',
+    '',
+    "כדי לקבל גישה לכל ערוצי הקהילה ולקבל את הרול אזרח, יש ללחוץ על הכפתור הירוק למטה 'אמת את עצמך ✅'.",
+    '',
+    '⚠️ משתמשים שלא עוברים אימות אינם יכולים לראות את שאר ערוצי השרת.',
   ].join('\n'),
-  buttonLabel: 'verify',
-  buttonEmoji: '✅',
+  buttonLabel: 'אמת את עצמך ✅',
+  // The label already contains the checkmark — don't render a second emoji.
+  buttonEmoji: '',
   roleName: '🫡 מאומת',
   roleColor: '#57F287',
   setupDone: '✅ פאנל האימות הוקם בערוץ הזה.',
@@ -22,9 +26,4 @@ module.exports = {
   failed: '⚠️ לא הצלחתי לתת לכם את התפקיד. בדקו את הרשאות הבוט וסדר התפקידים.',
   noRole: '⚠️ לא הוגדר תפקיד אימות. הריצו `/verify-role`.',
   needPerm: '⚠️ נדרשת הרשאת **ניהול שרת**.',
-  imageTitle: '✅ המתגים שלכם כאן',
-  imageSet: '✅ התמונה נשמרה ומופיעה בפאנל ובהודעת האימות ({updated} פאנלים).',
-  imageRemoved: '✅ התמונה הוסרה ({updated} פאנלים עודכנו).',
-  imageCurrent: '**התמונה הנוכחית:**\n{url}',
-  imageNone: 'אין תמונה מוגדרת. השתמשו ב־`/verify-image url:...` או `set:`.',
 };

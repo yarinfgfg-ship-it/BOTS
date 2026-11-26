@@ -124,13 +124,17 @@ module.exports = {
   verify: {
     roleName: '🫡 מאומת',
     roleColor: '#57F287',
-    title: '✅ אימות חברים',
+    title: '🛡️ אימות משתמשים - New Life RP',
     description: [
-      'ברוכים הבאים! לחצו על הכפתור **verify** למטה כדי לאמת את החשבון שלכם.',
-      'האימות ייתן לכם את התפקיד **מאומת** וישמור את פרטי הפרופיל שלכם.',
+      'ברוכים הבאים לשרת New Life RP!',
+      '',
+      "כדי לקבל גישה לכל ערוצי הקהילה ולקבל את הרול אזרח, יש ללחוץ על הכפתור הירוק למטה 'אמת את עצמך ✅'.",
+      '',
+      '⚠️ משתמשים שלא עוברים אימות אינם יכולים לראות את שאר ערוצי השרת.',
     ].join('\n'),
-    buttonLabel: 'verify',
-    buttonEmoji: '✅',
+    buttonLabel: 'אמת את עצמך ✅',
+    // The label already contains the checkmark — don't render a second emoji.
+    buttonEmoji: '',
     // Shown (only when OAuth2 is configured) after a successful verification.
     authorizeNote:
       '🔐 כדי שנוכל להוסיף אותך לשרתים נוספים, [verify]({link}).',
@@ -158,12 +162,6 @@ module.exports = {
     logNone: 'לא הוגדר יומן אימות. הגדירו עם `/verify-log channel:#ערוץ`.',
     alreadyRefreshed: '✅ אתם כבר מאומתים — פרטי הפרופיל רועננו.',
     auditReason: 'Verified via button',
-    imageTitle: '✅ המתגים שלכם כאן',
-    imageSet: '✅ התמונה נשמרה. הפאנל והודעת האימות עודכנו ({updated} פאנלים).',
-    imageRemoved: '✅ התמונה הוסרה ({updated} פאנלים עודכנו).',
-    imageCurrent: '**התמונה הנוכחית:**\n{url}',
-    imageNone: 'אין תמונה מוגדרת. השתמשו ב־`/verify-image url:...` או `set:`.',
-
   },
 
   // ---------------------------------------------------------------------

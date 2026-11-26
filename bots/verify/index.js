@@ -14,10 +14,8 @@ const {
   REST,
   Routes,
   Events,
-  AttachmentBuilder,
 } = require('discord.js');
 const config = require('./config');
-const { buildVerifyPanelCard } = require('./panelCard');
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
@@ -55,29 +53,6 @@ const commands = [
     .addRoleOption((o) => o.setName('role').setDescription('התפקיד לחברים חדשים'))
     .addBooleanOption((o) => o.setName('clear').setDescription('ביטול התפקיד'))
     .toJSON(),
-  new SlashCommandBuilder()
-    .setName('verify-image')
-    .setDescription('תמונה בפאנל האימות ובהודעת האימות')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addSubcommand((s) =>
-      s
-        .setName('set')
-        .setDescription('העלאת קובץ תמונה')
-        .addAttachmentOption((o) =>
-          o.setName('image').setDescription('קובץ התמונה').setRequired(true)
-        )
-    )
-    .addSubcommand((s) =>
-      s
-        .setName('url')
-        .setDescription('שימוש בקישור תמונה')
-        .addStringOption((o) =>
-          o.setName('link').setDescription('קישור http(s)').setRequired(true)
-        )
-    )
-    .addSubcommand((s) => s.setName('remove').setDescription('הסרת התמונה'))
-    .addSubcommand((s) => s.setName('preview').setDescription('הצגת התמונה הנוכחית'))
-    .toJSON(),
 ];
 
 function fill(text, vars) {
@@ -86,58 +61,27 @@ function fill(text, vars) {
   return out;
 }
 
-function brand(embed) {
-  if (client.user?.displayAvatarURL) {
-    embed.setThumbnail(client.user.displayAvatarURL({ size: 128 }));
-  }
-  return embed.setFooter({ text: config.footer });
-}
-
-async function panelVisual(guildId) {
-  if (cfg(guildId).verifyImageUrl) {
-    return { imageUrl: cfg(guildId).verifyImageUrl, files: [] };
-  }
-  const name = 'verify-panel.png';
-  const buffer = await buildVerifyPanelCard({
-    title: config.title,
-    description: config.description,
-  });
-  return { imageUrl: `attachment://${name}`, files: [new AttachmentBuilder(buffer, { name })] };
-}
-
-async function panel(guildId) {
+function panel() {
+  // Exact text-only panel: no image, no bot avatar, no footer.
   const embed = new EmbedBuilder()
     .setColor(config.colors.panel)
     .setTitle(config.title)
     .setDescription(config.description);
-  const visual = await panelVisual(guildId);
-  embed.setImage(visual.imageUrl);
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder()
-      .setCustomId('verify_button')
-      .setLabel(config.buttonLabel)
-      .setEmoji(config.buttonEmoji)
-      .setStyle(ButtonStyle.Success)
-  );
-  return { embeds: [brand(embed)], components: [row], files: visual.files };
+  const button = new ButtonBuilder()
+    .setCustomId('verify_button')
+    .setLabel(config.buttonLabel)
+    .setStyle(ButtonStyle.Success);
+  if (config.buttonEmoji) button.setEmoji(config.buttonEmoji);
+  const row = new ActionRowBuilder().addComponents(button);
+  return { embeds: [embed], components: [row] };
 }
 
 function verifyPayload(guildId, content) {
-  const payload = { content };
-  const url = cfg(guildId).verifyImageUrl;
-  if (url) {
-    payload.embeds = [
-      new EmbedBuilder()
-        .setColor(config.colors.panel)
-        .setTitle(config.imageTitle)
-        .setImage(url),
-    ];
-  }
-  return payload;
+  // Verification replies stay text-only too.
+  return { content };
 }
 
 async function refreshVerifyPanels(guild) {
-  const visual = await panelVisual(guild.id);
   let updated = 0;
   for (const channel of guild.channels.cache.values()) {
     if (!channel.isTextBased() || channel.isDMBased()) continue;
@@ -151,9 +95,16 @@ async function refreshVerifyPanels(guild) {
       ) {
         continue;
       }
-      const embed = EmbedBuilder.from(m.embeds[0]);
-      embed.setImage(visual.imageUrl);
-      await m.edit({ embeds: [embed], files: visual.files }).catch(() => {});
+      const embed = EmbedBuilder.from(m.embeds[0])
+        .setTitle(config.title)
+        .setDescription(config.description)
+        .setColor(config.colors.panel)
+        .setImage(null)
+        .setThumbnail(null)
+        .setFooter(null);
+      await m
+        .edit({ embeds: [embed], components: m.components, attachments: [] })
+        .catch(() => {});
       updated++;
     }
   }
@@ -204,7 +155,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       const gid = interaction.guild.id;
 
       if (interaction.commandName === 'verify-setup') {
-        await interaction.channel.send(await panel(gid));
+        await interaction.channel.send(panel());
         if (!cfg(gid).verifyRoleId) {
           const existing = interaction.guild.roles.cache.find((r) => r.name === config.roleName);
           const role = existing || (await interaction.guild.roles
@@ -249,37 +200,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return reply(interaction, fill(config.joinRoleSet, { role: role.id }));
       }
 
-      if (interaction.commandName === 'verify-image') {
-        const sub = interaction.options.getSubcommand();
-
-        if (sub === 'remove') {
-          delete cfg(gid).verifyImageUrl;
-          saveStore();
-          const updated = await refreshVerifyPanels(interaction.guild);
-          return reply(interaction, fill(config.imageRemoved, { updated }));
-        }
-
-        if (sub === 'preview') {
-          return reply(
-            interaction,
-            cfg(gid).verifyImageUrl
-              ? fill(config.imageCurrent, { url: cfg(gid).verifyImageUrl })
-              : config.imageNone
-          );
-        }
-
-        const url =
-          sub === 'url'
-            ? interaction.options.getString('link')
-            : interaction.options.getAttachment('image')?.url || null;
-        if (!url || !/^https?:\/\//i.test(url)) {
-          return reply(interaction, '⚠️ יש לספק תמונה או קישור תקין.');
-        }
-        cfg(gid).verifyImageUrl = url;
-        saveStore();
-        const updated = await refreshVerifyPanels(interaction.guild);
-        return reply(interaction, fill(config.imageSet, { updated }));
-      }
       return;
     }
 

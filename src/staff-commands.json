@@ -6,7 +6,6 @@
   "verify-add",
   "verify-minage",
   "verify-log",
-  "verify-image",
   "reverify",
   "welcome-setup",
   "ticket-setup",
