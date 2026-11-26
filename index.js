@@ -41,6 +41,11 @@ const {
   buildVerifyPanelCard,
 } = require('./src/imageCards');
 const levels = require('./src/levels');
+const {
+  DEFAULT_STATUS_CODE,
+  getServerStatus,
+  buildStatusEmbed,
+} = require('./src/serverStatus');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
@@ -2500,6 +2505,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
       switch (interaction.commandName) {
+        case 'status-setup': {
+          try {
+            await interaction.deferReply({ ephemeral: true });
+          } catch {
+            // Interaction may already be acknowledged — reply() handles both.
+          }
+          const status = await getServerStatus(DEFAULT_STATUS_CODE);
+          const embed = buildStatusEmbed(status);
+          try {
+            await interaction.editReply({ embeds: [embed] });
+          } catch {
+            await reply(interaction, { embeds: [embed] });
+          }
+          return;
+        }
+
         case 'verify-setup': {
           if (!interaction.memberPermissions?.has(PermissionFlagsBits.ManageChannels)) {
             return reply(interaction, { content: '⚠️ נדרשת הרשאת **ניהול ערוצים** כדי להשתמש בזה.' });

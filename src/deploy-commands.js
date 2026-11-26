@@ -667,6 +667,10 @@ const commands = [
     )
     .addSubcommand((s) => s.setName('list').setDescription('רשימת הגרלות פתוחות'))
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('status-setup')
+    .setDescription('סטטוס שרת FiveM: אונליין, שחקנים, גישה וזמן פעילות')
+    .toJSON(),
 ];
 
 // דיסקורד לא מאפשר לבוטים לשנות הרשאות פקודות דרך ה־API, אז מסתירים את
