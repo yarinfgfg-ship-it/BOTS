@@ -56,9 +56,13 @@ function panelFor(guildId) {
         query: new URLSearchParams({ limit: '50' }),
       });
 
+      // Match by the button, not by title — the Hebrew copy can change.
       const existing = messages.find(
         (m) =>
-          String(m.author?.id) === botId && m.embeds?.[0]?.title === config.verify.title
+          String(m.author?.id) === botId &&
+          m.components?.some((row) =>
+            row.components?.some((c) => c.custom_id === 'verify_button')
+          )
       );
 
       if (existing) {
