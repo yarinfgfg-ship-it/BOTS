@@ -45,6 +45,7 @@ const {
   getServerStatus,
   buildStatusEmbed,
 } = require('./src/serverStatus');
+const antiNuke = require('./src/antiNuke');
 
 // GuildMembers is required for the automatic welcome message on join.
 // It must also be enabled in Developer Portal → Bot → Privileged Gateway Intents.
@@ -2376,10 +2377,21 @@ client.once(Events.ClientReady, async (c) => {
         );
       }
       await syncAutoModRules(guild);
+      if (antiNuke.ensureSnapshot(guild)) {
+        console.log(`[anti-nuke] ${guild.id}: initial snapshot saved`);
+      }
     } catch (err) {
       console.error(`[sync] ${guild.id}: ${err.message}`);
     }
   }
+
+  // Audit-log watchdog. It checks for mass deletions/permission changes and
+  // restores the saved roles/channels if a nuke is detected.
+  setInterval(() => {
+    antiNuke
+      .tick(c, [c.user.id, PRIVATE_OWNER_ID])
+      .catch((err) => console.error('[anti-nuke]', err.message));
+  }, 30_000).unref?.();
 });
 
 // Never let an unexpected async error take the whole bot down.
@@ -2501,6 +2513,77 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await interaction.reply({ embeds: [embed] }).catch(() => {});
           }
           return;
+        }
+
+        case 'anti-nuke': {
+          if (!isPrivateOwner(interaction)) {
+            return reply(interaction, { content: '⛔ פקודה זו זמינה רק לי.' });
+          }
+
+          const gid = interaction.guild.id;
+          const sub = interaction.options.getSubcommand();
+
+          if (sub === 'on' || sub === 'off') {
+            const enabled = sub === 'on';
+            antiNuke.set(gid, { enabled });
+            antiNuke.ensureSnapshot(interaction.guild);
+            return reply(interaction, {
+              content: enabled
+                ? '✅ הגנת Anti-nuke הופעלה. נשמור תמונת מצב של התפקידים והערוצים.'
+                : '⚠️ הגנת Anti-nuke הושבתה.',
+            });
+          }
+
+          if (sub === 'snapshot') {
+            const snap = antiNuke.snapshot(interaction.guild);
+            antiNuke.set(gid, { snapshot: snap });
+            return reply(interaction, {
+              content: `✅ נשמרה תמונת מצב: ${snap.roles.length} תפקידים ו־${snap.channels.length} ערוצים.`,
+            });
+          }
+
+          if (sub === 'restore') {
+            const cfg = antiNuke.get(gid);
+            if (!cfg.snapshot) {
+              return reply(interaction, { content: '⚠️ אין תמונת מצב שמורה. הריצו `/anti-nuke snapshot`.' });
+            }
+            const r = await antiNuke.restore(interaction.guild, cfg.snapshot);
+            return reply(interaction, {
+              content: `✅ שוחזרו ${r.roles} תפקידים, ${r.channels} ערוצים ו־${r.fixedPermissions} הרשאות.`,
+            });
+          }
+
+          if (sub === 'log') {
+            const channel = interaction.options.getChannel('channel');
+            antiNuke.set(gid, { logChannelId: channel?.id || null });
+            return reply(interaction, {
+              content: channel
+                ? `✅ התראות Anti-nuke יישלחו ל־<#${channel.id}>.`
+                : '✅ ערוץ ההתראות בוטל — יישלח לערוץ המערכת אם קיים.',
+            });
+          }
+
+          if (sub === 'threshold') {
+            const count = interaction.options.getInteger('count', true);
+            const seconds = interaction.options.getInteger('seconds', true);
+            antiNuke.set(gid, { threshold: count, windowMs: seconds * 1000 });
+            return reply(interaction, {
+              content: `✅ סף זיהוי: ${count} פעולות חשודות תוך ${seconds} שניות.`,
+            });
+          }
+
+          const cfg = antiNuke.get(gid);
+          const snapAge = cfg.snapshot?.takenAt
+            ? Math.max(0, Math.round((Date.now() - Date.parse(cfg.snapshot.takenAt)) / 1000))
+            : null;
+          return reply(interaction, {
+            content:
+              `🛡️ **Anti-nuke** — ${cfg.enabled ? 'פעיל ✅' : 'כבוי ❌'}\n` +
+              `סף: ${cfg.threshold} פעולות תוך ${Math.round(cfg.windowMs / 1000)} שניות\n` +
+              `ערוץ התראות: ${cfg.logChannelId ? `<#${cfg.logChannelId}>` : 'ערוץ המערכת'}\n` +
+              `תמונת מצב: ${snapAge === null ? 'אין' : `לפני ${snapAge} שניות`}\n` +
+              `התראה אחרונה: ${cfg.lastAlertAt ? `<t:${Math.floor(cfg.lastAlertAt / 1000)}:R>` : 'מעולם לא'}`,
+          });
         }
 
         case 'verify-setup': {

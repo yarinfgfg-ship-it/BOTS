@@ -648,6 +648,33 @@ const commands = [
     .setName('status-setup')
     .setDescription('סטטוס שרת FiveM: אונליין, שחקנים, גישה וזמן פעילות')
     .toJSON(),
+  new SlashCommandBuilder()
+    .setName('anti-nuke')
+    .setDescription('הגנה מפני מחיקה המונית של ערוצים, תפקידים והרשאות')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addSubcommand((s) => s.setName('on').setDescription('הפעלת ההגנה'))
+    .addSubcommand((s) => s.setName('off').setDescription('השבתת ההגנה'))
+    .addSubcommand((s) => s.setName('status').setDescription('הצגת מצב ההגנה'))
+    .addSubcommand((s) => s.setName('snapshot').setDescription('שמירת תמונת מצב עכשווית'))
+    .addSubcommand((s) => s.setName('restore').setDescription('שחזור מתמונת המצב האחרונה'))
+    .addSubcommand((s) =>
+      s
+        .setName('log')
+        .setDescription('ערוץ להתראות Anti-nuke (בלי ערוץ = ביטול)')
+        .addChannelOption((o) => o.setName('channel').setDescription('ערוץ ההתראות'))
+    )
+    .addSubcommand((s) =>
+      s
+        .setName('threshold')
+        .setDescription('כמה פעולות חשודות ייחשבו כ־nuke')
+        .addIntegerOption((o) =>
+          o.setName('count').setDescription('מספר פעולות').setRequired(true).setMinValue(2).setMaxValue(50)
+        )
+        .addIntegerOption((o) =>
+          o.setName('seconds').setDescription('בתוך כמה שניות').setRequired(true).setMinValue(10).setMaxValue(300)
+        )
+    )
+    .toJSON(),
 ];
 
 // דיסקורד לא מאפשר לבוטים לשנות הרשאות פקודות דרך ה־API, אז מסתירים את
@@ -658,6 +685,9 @@ const ROLE_GATED_COMMANDS = new Set([
   'ticket-admin',
   'ticket-admin-role',
   'welcome-card',
+  // Owner-only in code, but visible to server managers so the private owner
+  // can still find it in any server without an Administrator override.
+  'anti-nuke',
 ]);
 const isStaffCommand = (c) =>
   Boolean(c.default_member_permissions) &&
@@ -697,7 +727,9 @@ const rest = new REST({ version: '10' }).setToken(DISCORD_TOKEN);
     // Remove old per-guild copies left by earlier deploys, but keep the
     // status command as a guild command so it appears instantly. Global
     // commands can take up to an hour to propagate to Discord clients.
-    const instantCommands = commands.filter((c) => c.name === 'status-setup');
+    const instantCommands = commands.filter((c) =>
+      ['status-setup', 'anti-nuke'].includes(c.name)
+    );
     const oldGuilds = [GUILD_ID, ...(INSTANT_GUILD_IDS || '').split(',')]
       .map((id) => (id || '').trim())
       .filter(Boolean);

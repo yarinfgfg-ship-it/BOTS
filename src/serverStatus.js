@@ -185,7 +185,7 @@ function buildStatusEmbed(status) {
     ? status.adminOnly === null
       ? 'לא ידוע'
       : status.adminOnly
-        ? 'כן — רק מורשים / אדמין'
+        ? 'רק מורשים / אדמין'
         : 'לא — פתוח לכולם'
     : dash;
 
@@ -211,16 +211,6 @@ function buildStatusEmbed(status) {
       {
         name: '⏱️ זמן פעילות',
         value: status.online ? formatUptime(status.uptimeMs) : dash,
-        inline: true,
-      },
-      {
-        name: '🗺️ מפה',
-        value: status.online && status.map ? status.map : dash,
-        inline: true,
-      },
-      {
-        name: '🎮 מצב',
-        value: status.online && status.mode ? status.mode : dash,
         inline: true,
       },
       {
