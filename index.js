@@ -2627,7 +2627,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           } catch {
             sent = await interaction.reply({ embeds: [embed] }).catch(() => null);
           }
-          if (sent?.id) {
+          if (sent?.id && interaction.guild) {
             guildConfig.set(interaction.guild.id, {
               statusChannelId: interaction.channel.id,
               statusMessageId: sent.id,
