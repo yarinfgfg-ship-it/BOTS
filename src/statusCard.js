@@ -1,6 +1,6 @@
 const path = require('path');
 const { createCanvas, GlobalFonts, loadImage } = require('@napi-rs/canvas');
-const { formatUptime, joinLink, statusAccessText } = require('./serverStatus');
+const { joinLink, statusAccessText } = require('./serverStatus');
 
 const FONT = 'StatusCardHebrew';
 try {
@@ -89,62 +89,96 @@ async function loadRemoteImage(url, timeoutMs = 6000) {
   }
 }
 
-function relativeTime(ms) {
+function compactUptime(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return '—';
+  const total = Math.floor(ms / 1000);
+  const days = Math.floor(total / 86400);
+  const hours = Math.floor((total % 86400) / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  if (days) return `${days} יום`;
+  if (hours) return `${hours} שע'`;
+  if (minutes) return `${minutes} דק'`;
+  return `${total} שנ'`;
+}
+
+function shortRelative(ms) {
   if (!ms || !Number.isFinite(Number(ms))) return '—';
   const diff = Math.max(0, Date.now() - Number(ms));
   if (diff < 60_000) return 'עכשיו';
   const minutes = Math.floor(diff / 60_000);
-  if (minutes < 60) return `לפני ${minutes} ${minutes === 1 ? 'דקה' : 'דקות'}`;
+  if (minutes < 60) return `לפני ${minutes} דק'`;
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `לפני ${hours} ${hours === 1 ? 'שעה' : 'שעות'}`;
-  const days = Math.floor(hours / 24);
-  return `לפני ${days} ${days === 1 ? 'יום' : 'ימים'}`;
+  if (hours < 24) return `לפני ${hours} שע'`;
+  return `לפני ${Math.floor(hours / 24)} יום`;
+}
+
+// Deterministic grain keeps the card photographic without flickering on refresh.
+function drawGrain(ctx, accent) {
+  let seed = 20261126;
+  const next = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 4294967296;
+  };
+  ctx.save();
+  for (let i = 0; i < 1600; i += 1) {
+    const x = next() * W;
+    const y = next() * H;
+    ctx.fillStyle = next() > 0.62 ? rgba(accent, 0.10) : 'rgba(255,255,255,0.035)';
+    ctx.fillRect(x, y, 1.4, 1.4);
+  }
+  ctx.restore();
 }
 
 function drawBackdrop(ctx, accent) {
-  gradient(ctx, '#0c1020', '#1b1330');
+  gradient(ctx, '#080b14', '#171126');
 
-  const glow = ctx.createRadialGradient(W - 170, 110, 20, W - 170, 110, 520);
-  glow.addColorStop(0, rgba(accent, 0.34));
+  ctx.save();
+  ctx.translate(760, 330);
+  ctx.rotate(-0.32);
+  const streak = ctx.createLinearGradient(-520, 0, 520, 0);
+  streak.addColorStop(0, rgba(accent, 0));
+  streak.addColorStop(0.5, rgba(accent, 0.18));
+  streak.addColorStop(1, rgba(accent, 0));
+  ctx.fillStyle = streak;
+  ctx.fillRect(-620, -520, 1240, 1040);
+  ctx.restore();
+
+  const glow = ctx.createRadialGradient(180, 520, 20, 180, 520, 520);
+  glow.addColorStop(0, rgba(accent, 0.20));
   glow.addColorStop(1, rgba(accent, 0));
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
-
-  ctx.strokeStyle = 'rgba(255,255,255,0.045)';
-  ctx.lineWidth = 1;
-  for (let x = 0; x <= W; x += 60) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, H);
-    ctx.stroke();
-  }
-  for (let y = 0; y <= H; y += 60) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-  }
+  drawGrain(ctx, accent);
 }
 
-function drawPlayerBar(ctx, x, y, players, maxPlayers, accent) {
+function drawVignette(ctx) {
+  const v = ctx.createRadialGradient(W / 2, H / 2, 170, W / 2, H / 2, 760);
+  v.addColorStop(0, 'rgba(0,0,0,0)');
+  v.addColorStop(1, 'rgba(0,0,0,0.52)');
+  ctx.fillStyle = v;
+  ctx.fillRect(0, 0, W, H);
+  drawGrain(ctx, '#ffffff');
+}
+
+function drawPlayerBar(ctx, right, y, players, maxPlayers, accent) {
   const segments = 10;
-  const segW = 22;
+  const segW = 20;
   const gap = 6;
   const filled = maxPlayers
     ? Math.max(0, Math.min(segments, Math.round((players / maxPlayers) * segments)))
     : 0;
   for (let i = 0; i < segments; i += 1) {
-    const sx = x + i * (segW + gap);
-    roundRect(ctx, sx, y, segW, 12, 6);
-    ctx.fillStyle = i < filled ? accent : 'rgba(255,255,255,0.14)';
+    const sx = right - (segments - i) * (segW + gap) + gap;
+    roundRect(ctx, sx, y, segW, 10, 5);
+    ctx.fillStyle = i < filled ? accent : 'rgba(255,255,255,0.13)';
     ctx.fill();
   }
 }
 
 /**
- * Render the public FiveM status card as a PNG "photo" card.
- * The supplied banner becomes the full background photo; without one the
- * server icon is used, and if that fails a canvas-only backdrop is drawn.
+ * Render a compact, photo-led FiveM status card as a PNG.
+ * `/status-banner` supplies the hero photo; otherwise the Cfx icon is used,
+ * and if that fails a canvas-only cinematic backdrop is drawn.
  */
 async function buildStatusCard({ status, bannerUrl = '' }) {
   const accent = status.online ? '#2ECC71' : '#E74C3C';
@@ -162,122 +196,119 @@ async function buildStatusCard({ status, bannerUrl = '' }) {
   if (photo) {
     drawCover(ctx, photo, 0, 0, W, H);
     const shade = ctx.createLinearGradient(0, 0, W, H);
-    shade.addColorStop(0, 'rgba(7,10,18,0.93)');
-    shade.addColorStop(0.55, 'rgba(7,10,18,0.78)');
-    shade.addColorStop(1, 'rgba(7,10,18,0.58)');
+    shade.addColorStop(0, 'rgba(5,7,12,0.94)');
+    shade.addColorStop(0.48, 'rgba(5,7,12,0.74)');
+    shade.addColorStop(1, 'rgba(5,7,12,0.48)');
     ctx.fillStyle = shade;
     ctx.fillRect(0, 0, W, H);
   } else {
     drawBackdrop(ctx, accent);
   }
+  drawVignette(ctx);
 
+  // Thin rail + restrained frame.
   ctx.fillStyle = accent;
-  ctx.fillRect(0, 0, W, 14);
-  ctx.strokeStyle = rgba(accent, 0.9);
-  ctx.lineWidth = 6;
-  ctx.strokeRect(3, 3, W - 6, H - 6);
+  ctx.fillRect(0, 0, 10, H);
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(18, 18, W - 36, H - 36);
 
-  // Top strip: English tag on the left, Hebrew state on the right.
   ctx.textBaseline = 'middle';
+
   ctx.direction = 'ltr';
   ctx.textAlign = 'left';
-  ctx.font = `bold 22px ${FONT}`;
+  ctx.font = `bold 19px ${FONT}`;
   ctx.fillStyle = rgba(accent, 0.95);
-  ctx.fillText('FIVEM STATUS', 70, 82);
+  ctx.fillText('N E W   L I F E   R P', 66, 74);
 
-  ctx.direction = 'rtl';
-  ctx.textAlign = 'right';
-  ctx.font = `bold 52px ${FONT}`;
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(status.online ? 'השרת אונליין' : 'השרת אופליין', W - 70, 112);
-
-  ctx.font = `bold 44px ${FONT}`;
-  ctx.fillStyle = '#f4f6ff';
-  ctx.fillText(shorten(status.name || 'New Life RP', 44), W - 70, 192);
-
-  const link = joinLink(status.code);
-  const visibleLink = `cfx.re/join/${status.code}`;
-  ctx.direction = 'ltr';
-  ctx.textAlign = 'left';
-  ctx.font = `bold 29px ${FONT}`;
-  const linkW = Math.max(360, ctx.measureText(visibleLink).width + 48);
-  roundRect(ctx, 70, 228, linkW, 58, 18);
-  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  const state = status.online ? 'אונליין' : 'אופליין';
+  ctx.font = `bold 26px ${FONT}`;
+  const pillW = Math.max(158, ctx.measureText(state).width + 78);
+  roundRect(ctx, W - 66 - pillW, 48, pillW, 54, 27);
+  ctx.fillStyle = 'rgba(8,12,20,0.72)';
   ctx.fill();
   ctx.strokeStyle = rgba(accent, 0.55);
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = '#d9e6ff';
-  ctx.fillText(visibleLink, 94, 258);
+  ctx.beginPath();
+  ctx.arc(W - 66 - pillW + 30, 75, 8, 0, Math.PI * 2);
+  ctx.fillStyle = accent;
+  ctx.fill();
+  ctx.direction = 'rtl';
+  ctx.textAlign = 'right';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(state, W - 86, 76);
 
-  // Four stat columns, laid out right-to-left for Hebrew readers.
-  roundRect(ctx, 70, 318, W - 140, 232, 24);
-  ctx.fillStyle = 'rgba(8,12,22,0.74)';
+  ctx.font = `bold 58px ${FONT}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(shorten(status.name || 'New Life RP', 28), W - 66, 186);
+
+  const visibleLink = `cfx.re/join/${status.code}`;
+  ctx.direction = 'ltr';
+  ctx.textAlign = 'right';
+  ctx.font = `bold 27px ${FONT}`;
+  const linkW = Math.max(330, ctx.measureText(visibleLink).width + 52);
+  roundRect(ctx, W - 66 - linkW, 232, linkW, 56, 18);
+  ctx.fillStyle = 'rgba(255,255,255,0.10)';
+  ctx.fill();
+  ctx.strokeStyle = rgba(accent, 0.5);
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#dce7ff';
+  ctx.fillText(visibleLink, W - 92, 260);
+
+  // Three cells only — short labels, no map/mode clutter.
+  roundRect(ctx, 66, 328, W - 132, 232, 26);
+  ctx.fillStyle = 'rgba(6,10,18,0.70)';
   ctx.fill();
   ctx.strokeStyle = 'rgba(255,255,255,0.10)';
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  const columns = [
-    {
-      x: 905,
-      label: 'שחקנים',
-      value: status.online
-        ? `${status.players} / ${status.maxPlayers || '—'}`
-        : '—',
-      big: true,
-    },
-    {
-      x: 660,
-      label: 'גישה',
-      value: statusAccessText(status),
-      big: false,
-    },
-    {
-      x: 415,
-      label: 'זמן פעילות',
-      value: status.online ? formatUptime(status.uptimeMs) : '—',
-      big: false,
-    },
-    {
-      x: 170,
-      label: 'נראה לאחרונה',
-      value: relativeTime(status.lastSeenMs),
-      big: false,
-    },
-  ];
-
-  for (const col of columns) {
-    ctx.direction = 'rtl';
-    ctx.textAlign = 'right';
-    ctx.font = `24px ${FONT}`;
-    ctx.fillStyle = '#9aa6c4';
-    ctx.fillText(col.label, col.x, 368);
-    ctx.font = `${col.big ? 'bold 40px' : 'bold 29px'} ${FONT}`;
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText(shorten(col.value, col.big ? 22 : 24), col.x, 425);
-  }
-
-  drawPlayerBar(
-    ctx,
-    905 - 10 * 28 + 6,
-    480,
-    status.players || 0,
-    status.maxPlayers || 0,
-    accent
-  );
+  const divider = (x) => {
+    ctx.beginPath();
+    ctx.moveTo(x, 354);
+    ctx.lineTo(x, 534);
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.stroke();
+  };
+  divider(740);
+  divider(400);
 
   ctx.direction = 'rtl';
   ctx.textAlign = 'right';
+
   ctx.font = `22px ${FONT}`;
-  ctx.fillStyle = '#91a0c0';
-  ctx.fillText(`בדיקת סטטוס • ${status.code}`, W - 70, 614);
+  ctx.fillStyle = '#8f9bb8';
+  ctx.fillText('שחקנים', 1090, 378);
+  ctx.font = `bold 44px ${FONT}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(status.online ? `${status.players} / ${status.maxPlayers || '—'}` : '—', 1090, 432);
+  drawPlayerBar(ctx, 1090, 478, status.players || 0, status.maxPlayers || 0, accent);
+
+  ctx.font = `22px ${FONT}`;
+  ctx.fillStyle = '#8f9bb8';
+  ctx.fillText('גישה', 700, 378);
+  ctx.font = `bold 30px ${FONT}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(statusAccessText(status), 700, 434);
+
+  ctx.font = `22px ${FONT}`;
+  ctx.fillStyle = '#8f9bb8';
+  ctx.fillText('זמן פעילות', 360, 378);
+  ctx.font = `bold 34px ${FONT}`;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(status.online ? compactUptime(status.uptimeMs) : '—', 360, 434);
+
+  ctx.font = `20px ${FONT}`;
+  ctx.fillStyle = '#7f8aa8';
+  ctx.fillText(`נראה לאחרונה · ${shortRelative(status.lastSeenMs)}`, W - 66, 610);
 
   ctx.direction = 'ltr';
   ctx.textAlign = 'left';
-  ctx.font = `bold 20px ${FONT}`;
-  ctx.fillStyle = rgba(accent, 0.9);
-  ctx.fillText('LIVE • NEW LIFE RP', 70, 614);
+  ctx.font = `bold 18px ${FONT}`;
+  ctx.fillStyle = rgba(accent, 0.85);
+  ctx.fillText(`• ${status.code}`, 66, 610);
 
   return canvas.toBuffer('image/png');
 }
