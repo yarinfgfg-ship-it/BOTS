@@ -29,7 +29,7 @@ function shorten(text, max) {
 }
 
 function rgba(hex, alpha) {
-  const raw = String(hex || '#2ECC71').replace('#', '');
+  const raw = String(hex || '#C3AE68').replace('#', '');
   const full = raw.length === 3 ? raw.split('').map((c) => c + c).join('') : raw;
   const n = Number.parseInt(full, 16) || 0;
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
@@ -130,7 +130,7 @@ function drawGrain(ctx, accent) {
 }
 
 function drawBackdrop(ctx, accent) {
-  gradient(ctx, '#080b14', '#171126');
+  gradient(ctx, '#0B0B08', '#2A2216');
 
   ctx.save();
   ctx.translate(760, 330);
@@ -181,7 +181,7 @@ function drawPlayerBar(ctx, right, y, players, maxPlayers, accent) {
  * and if that fails a canvas-only cinematic backdrop is drawn.
  */
 async function buildStatusCard({ status, bannerUrl = '' }) {
-  const accent = status.online ? '#2ECC71' : '#E74C3C';
+  const accent = status.online ? '#C3AE68' : '#D86A5A';
   const canvas = createCanvas(W, H);
   const ctx = canvas.getContext('2d');
 
@@ -196,9 +196,9 @@ async function buildStatusCard({ status, bannerUrl = '' }) {
   if (photo) {
     drawCover(ctx, photo, 0, 0, W, H);
     const shade = ctx.createLinearGradient(0, 0, W, H);
-    shade.addColorStop(0, 'rgba(5,7,12,0.94)');
-    shade.addColorStop(0.48, 'rgba(5,7,12,0.74)');
-    shade.addColorStop(1, 'rgba(5,7,12,0.48)');
+    shade.addColorStop(0, 'rgba(8,7,4,0.94)');
+    shade.addColorStop(0.48, 'rgba(8,7,4,0.74)');
+    shade.addColorStop(1, 'rgba(8,7,4,0.48)');
     ctx.fillStyle = shade;
     ctx.fillRect(0, 0, W, H);
   } else {
@@ -254,7 +254,7 @@ async function buildStatusCard({ status, bannerUrl = '' }) {
   ctx.strokeStyle = rgba(accent, 0.5);
   ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.fillStyle = '#dce7ff';
+  ctx.fillStyle = '#f4e4b8';
   ctx.fillText(visibleLink, W - 92, 260);
 
   // Three cells only — short labels, no map/mode clutter.
@@ -279,7 +279,7 @@ async function buildStatusCard({ status, bannerUrl = '' }) {
   ctx.textAlign = 'right';
 
   ctx.font = `22px ${FONT}`;
-  ctx.fillStyle = '#8f9bb8';
+  ctx.fillStyle = '#b7a98a';
   ctx.fillText('שחקנים', 1090, 378);
   ctx.font = `bold 44px ${FONT}`;
   ctx.fillStyle = '#ffffff';
@@ -287,21 +287,21 @@ async function buildStatusCard({ status, bannerUrl = '' }) {
   drawPlayerBar(ctx, 1090, 478, status.players || 0, status.maxPlayers || 0, accent);
 
   ctx.font = `22px ${FONT}`;
-  ctx.fillStyle = '#8f9bb8';
+  ctx.fillStyle = '#b7a98a';
   ctx.fillText('גישה', 700, 378);
   ctx.font = `bold 30px ${FONT}`;
   ctx.fillStyle = '#ffffff';
   ctx.fillText(statusAccessText(status), 700, 434);
 
   ctx.font = `22px ${FONT}`;
-  ctx.fillStyle = '#8f9bb8';
+  ctx.fillStyle = '#b7a98a';
   ctx.fillText('זמן פעילות', 360, 378);
   ctx.font = `bold 34px ${FONT}`;
   ctx.fillStyle = '#ffffff';
   ctx.fillText(status.online ? compactUptime(status.uptimeMs) : '—', 360, 434);
 
   ctx.font = `20px ${FONT}`;
-  ctx.fillStyle = '#7f8aa8';
+  ctx.fillStyle = '#9c8e70';
   ctx.fillText(`נראה לאחרונה · ${shortRelative(status.lastSeenMs)}`, W - 66, 610);
 
   ctx.direction = 'ltr';
